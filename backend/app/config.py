@@ -76,6 +76,15 @@ class Settings(BaseSettings):
     # the evaluation harness can sweep it.
     hnsw_ef_search: int = 64
 
+    # --- Reranking ---
+    # "llm" re-scores candidates with the language model; "identity" keeps the
+    # vector order and is the control group for the section 21 experiment.
+    reranker: str = "llm"
+    # Lines of each candidate shown to the ranker. A signature, a docstring and
+    # the first few statements carry nearly all the signal about what code
+    # does; sending whole chunks would make ranking cost as much as answering.
+    rerank_preview_lines: int = 18
+
     # --- Indexing limits ---
     max_file_bytes: int = 1_000_000
     max_chunk_lines: int = 120

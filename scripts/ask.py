@@ -102,6 +102,18 @@ def main() -> int:
         if result.sources_omitted:
             print(f"\n  ({result.sources_omitted} weaker sources dropped to fit the context budget)")
 
+        if result.rerank:
+            r = result.rerank
+            rule("RERANKING")
+            print(f"  strategy {r.strategy}   {r.candidates} candidates -> "
+                  f"{len(result.sources)} sent to the LLM")
+            print(f"  changed the order: {r.changed_order}"
+                  + ("   (model output unusable, fell back to vector order)"
+                     if r.fell_back else ""))
+            if r.llm_calls:
+                print(f"  extra LLM calls: {r.llm_calls}"
+                      + (f"   ~${r.usd}" if r.usd is not None else ""))
+
         rule()
         print(f"  grounded {result.is_grounded}   "
               f"citation coverage {result.citation_coverage:.0%}")

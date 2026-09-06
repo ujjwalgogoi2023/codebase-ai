@@ -279,7 +279,10 @@ def test_context_budget_drops_the_weakest_sources(db, indexed):
 
     assert result.sources_omitted > 0
     assert len(result.sources) < 6
-    assert len(llm.calls) == 1
+    # One generation call. The reranker shares this fake provider, so filter to
+    # calls carrying the generation system prompt rather than counting all.
+    generation_calls = [c for c in llm.calls if c["system"] == SYSTEM_PROMPT]
+    assert len(generation_calls) == 1
 
 
 def test_budget_keeps_the_strongest_sources(db, indexed):

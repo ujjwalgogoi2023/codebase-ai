@@ -59,6 +59,7 @@ from app.config import Settings, get_settings
 from app.services.citations import Citation, attach_citations, format_sources_block
 from app.services.embeddings import EmbeddingProvider, _get_encoder
 from app.services.llm import LLMProvider, LLMResponse, get_llm_provider
+from app.services.reranker import RerankResult, Reranker, get_reranker
 from app.services.retriever import (
     RetrievedChunk,
     Retriever,
@@ -121,6 +122,9 @@ class GeneratedAnswer:
     # Sources dropped to fit the context budget.
     sources_omitted: int = 0
 
+    # --- stage 10: what reranking did ---
+    rerank: RerankResult | None = None
+
     # --- stage 7: resolved citations ---
     raw_answer: str = ""
     citations: list[Citation] = field(default_factory=list)
@@ -152,6 +156,7 @@ class GeneratedAnswer:
             "citation_coverage": round(self.citation_coverage, 3),
             "invalid_markers": self.invalid_markers,
             "citations": [c.as_dict() for c in self.citations],
+            "rerank": self.rerank.as_dict() if self.rerank else None,
             "usage": {
                 "input_tokens": self.input_tokens,
                 "output_tokens": self.output_tokens,
@@ -201,6 +206,7 @@ class Generator:
         embedding_provider: EmbeddingProvider | None = None,
         settings: Settings | None = None,
         retriever: Retriever | None = None,
+        reranker: Reranker | None = None,
     ) -> None:
         self.session = session
         self.settings = settings or get_settings()
@@ -208,6 +214,7 @@ class Generator:
         self.retriever = retriever or Retriever(
             session, provider=embedding_provider, settings=self.settings
         )
+        self.reranker = reranker or get_reranker(self.settings, llm=self.llm)
 
     def answer(
         self,
@@ -216,6 +223,7 @@ class Generator:
         *,
         history: list[dict[str, str]] | None = None,
         top_k: int | None = None,
+        rerank_top_k: int | None = None,
         filters: SearchFilters | None = None,
     ) -> GeneratedAnswer:
         history = history or []
@@ -238,7 +246,13 @@ class Generator:
                 no_context=True,
             )
 
-        kept, omitted = self._fit_to_budget(search.chunks, question)
+        # Retrieve wide (top_k), then spend a more accurate scorer on the
+        # shortlist to pick what the LLM actually reads (rerank_top_k).
+        rerank = self.reranker.rerank(
+            question, search.chunks, rerank_top_k or self.settings.rerank_top_k
+        )
+
+        kept, omitted = self._fit_to_budget(rerank.chunks, question)
 
         messages = [
             *self._recent_history(history),
@@ -273,6 +287,7 @@ class Generator:
             usd=response.usd,
             truncated=response.truncated,
             sources_omitted=omitted,
+            rerank=rerank,
         )
 
     # -- internals ---------------------------------------------------------
