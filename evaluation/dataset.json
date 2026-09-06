@@ -1,0 +1,393 @@
+{
+  "repository": "codebaseai-backend",
+  "source_path": "backend",
+  "description": "Retrieval evaluation set for CodebaseAI, labelled against its own backend. Questions are phrased the way a developer would ask them rather than by quoting identifiers, so a hit requires semantic retrieval rather than keyword overlap. A question is correct if any expected file appears among the top-K retrieved chunks.",
+  "labelling_notes": [
+    "expected_files is a list because more than one file can legitimately answer a question.",
+    "Paths are relative to the indexed root (backend/) and matched by suffix.",
+    "expected_symbols is optional and scored separately as a stricter check."
+  ],
+  "questions": [
+    {
+      "id": "q01",
+      "question": "Where do we decide which files are worth indexing?",
+      "expected_files": ["app/services/repository_parser.py"],
+      "expected_symbols": ["parse_repository"],
+      "category": "parsing"
+    },
+    {
+      "id": "q02",
+      "question": "How does the system work out what programming language a file is written in?",
+      "expected_files": ["app/services/repository_parser.py"],
+      "expected_symbols": ["detect_language"],
+      "category": "parsing"
+    },
+    {
+      "id": "q03",
+      "question": "How do we avoid walking into a folder full of installed dependencies?",
+      "expected_files": ["app/services/repository_parser.py"],
+      "expected_symbols": ["should_ignore_dir", "is_virtualenv"],
+      "category": "parsing"
+    },
+    {
+      "id": "q04",
+      "question": "How is a Python virtual environment recognised on disk?",
+      "expected_files": ["app/services/repository_parser.py"],
+      "expected_symbols": ["is_virtualenv"],
+      "category": "parsing"
+    },
+    {
+      "id": "q05",
+      "question": "Where do we detect that a file is binary rather than text?",
+      "expected_files": ["app/services/repository_parser.py"],
+      "expected_symbols": ["_read_text"],
+      "category": "parsing"
+    },
+    {
+      "id": "q06",
+      "question": "How do we keep a whole function together instead of cutting it in half?",
+      "expected_files": ["app/services/chunker.py"],
+      "expected_symbols": ["_python_spans", "chunk_file"],
+      "category": "chunking"
+    },
+    {
+      "id": "q07",
+      "question": "What happens when one piece of code is too big to send on its own?",
+      "expected_files": ["app/services/chunker.py"],
+      "expected_symbols": ["_split_oversized"],
+      "category": "chunking"
+    },
+    {
+      "id": "q08",
+      "question": "How do we find function declarations in JavaScript without a real parser?",
+      "expected_files": ["app/services/chunker.py"],
+      "expected_symbols": ["_brace_spans", "_match_declaration"],
+      "category": "chunking"
+    },
+    {
+      "id": "q09",
+      "question": "How do we stop curly braces inside a string from confusing the parser?",
+      "expected_files": ["app/services/chunker.py"],
+      "expected_symbols": ["_mask_line", "_brace_depths"],
+      "category": "chunking"
+    },
+    {
+      "id": "q10",
+      "question": "How are documentation files divided into pieces?",
+      "expected_files": ["app/services/chunker.py"],
+      "expected_symbols": ["_markdown_spans"],
+      "category": "chunking"
+    },
+    {
+      "id": "q11",
+      "question": "How do we make sure no lines of source code get dropped?",
+      "expected_files": ["app/services/chunker.py"],
+      "expected_symbols": ["_fill_gaps"],
+      "category": "chunking"
+    },
+    {
+      "id": "q12",
+      "question": "What stops tiny snippets from each becoming their own entry?",
+      "expected_files": ["app/services/chunker.py"],
+      "expected_symbols": ["_merge_tiny"],
+      "category": "chunking"
+    },
+    {
+      "id": "q13",
+      "question": "Where is text converted into a numeric representation?",
+      "expected_files": ["app/services/embeddings.py"],
+      "expected_symbols": ["embed", "embed_chunks"],
+      "category": "embeddings"
+    },
+    {
+      "id": "q14",
+      "question": "How do we avoid paying for the same computation twice?",
+      "expected_files": ["app/services/embeddings.py"],
+      "expected_symbols": ["CachedEmbeddingProvider"],
+      "category": "embeddings"
+    },
+    {
+      "id": "q15",
+      "question": "What happens when the provider says the account has run out of money?",
+      "expected_files": ["app/services/embeddings.py", "app/services/llm.py"],
+      "expected_symbols": ["_is_quota_error"],
+      "category": "embeddings"
+    },
+    {
+      "id": "q16",
+      "question": "How do we handle input that is longer than the model accepts?",
+      "expected_files": ["app/services/embeddings.py"],
+      "expected_symbols": ["_truncate"],
+      "category": "embeddings"
+    },
+    {
+      "id": "q17",
+      "question": "Where do we wait and try again after being rate limited?",
+      "expected_files": ["app/services/embeddings.py", "app/services/llm.py"],
+      "expected_symbols": ["_sleep_backoff"],
+      "category": "embeddings"
+    },
+    {
+      "id": "q18",
+      "question": "How can I find out what indexing a repository will cost before running it?",
+      "expected_files": ["app/services/embeddings.py"],
+      "expected_symbols": ["estimate_cost", "count_tokens"],
+      "category": "embeddings"
+    },
+    {
+      "id": "q19",
+      "question": "How do we run the pipeline offline without contacting a provider?",
+      "expected_files": ["app/services/embeddings.py", "app/services/llm.py"],
+      "expected_symbols": ["FakeEmbeddingProvider", "FakeLLMProvider"],
+      "category": "embeddings"
+    },
+    {
+      "id": "q20",
+      "question": "Where are the database tables described?",
+      "expected_files": ["app/models/__init__.py"],
+      "category": "storage"
+    },
+    {
+      "id": "q21",
+      "question": "What information is stored alongside each piece of code?",
+      "expected_files": ["app/models/__init__.py"],
+      "expected_symbols": ["Chunk"],
+      "category": "storage"
+    },
+    {
+      "id": "q22",
+      "question": "Where is the index that makes similarity lookups fast defined?",
+      "expected_files": ["app/models/__init__.py"],
+      "expected_symbols": ["Chunk"],
+      "category": "storage"
+    },
+    {
+      "id": "q23",
+      "question": "How is a connection to the database established?",
+      "expected_files": ["app/db/base.py"],
+      "expected_symbols": ["get_engine", "get_session_factory"],
+      "category": "storage"
+    },
+    {
+      "id": "q24",
+      "question": "Where do the tables actually get created?",
+      "expected_files": ["app/db/base.py"],
+      "expected_symbols": ["init_db"],
+      "category": "storage"
+    },
+    {
+      "id": "q25",
+      "question": "How does a codebase end up saved in the database?",
+      "expected_files": ["app/services/indexer.py"],
+      "expected_symbols": ["run_indexing", "_persist"],
+      "category": "indexing"
+    },
+    {
+      "id": "q26",
+      "question": "What happens if the import process fails partway through?",
+      "expected_files": ["app/services/indexer.py"],
+      "expected_symbols": ["run_indexing"],
+      "category": "indexing"
+    },
+    {
+      "id": "q27",
+      "question": "How do we remove a codebase and everything belonging to it?",
+      "expected_files": ["app/services/indexer.py"],
+      "expected_symbols": ["delete_repository"],
+      "category": "indexing"
+    },
+    {
+      "id": "q28",
+      "question": "How does a plain English question end up matched against stored code?",
+      "expected_files": ["app/services/retriever.py"],
+      "expected_symbols": ["search", "Retriever"],
+      "category": "retrieval"
+    },
+    {
+      "id": "q29",
+      "question": "How can results be narrowed to a single language or folder?",
+      "expected_files": ["app/services/retriever.py"],
+      "expected_symbols": ["SearchFilters", "_build_query"],
+      "category": "retrieval"
+    },
+    {
+      "id": "q30",
+      "question": "What prevents comparing vectors that were produced by different models?",
+      "expected_files": ["app/services/retriever.py"],
+      "expected_symbols": ["_load_ready_repository"],
+      "category": "retrieval"
+    },
+    {
+      "id": "q31",
+      "question": "Where is the trade-off between search accuracy and speed configured?",
+      "expected_files": ["app/services/retriever.py", "app/config.py"],
+      "expected_symbols": ["_apply_ef_search"],
+      "category": "retrieval"
+    },
+    {
+      "id": "q32",
+      "question": "Where do we assemble the instructions sent to the language model?",
+      "expected_files": ["app/services/generator.py"],
+      "expected_symbols": ["build_user_message", "format_context"],
+      "category": "generation"
+    },
+    {
+      "id": "q33",
+      "question": "How does the assistant admit it cannot answer something?",
+      "expected_files": ["app/services/generator.py"],
+      "expected_symbols": ["NO_CONTEXT_ANSWER"],
+      "category": "generation"
+    },
+    {
+      "id": "q34",
+      "question": "How much of an earlier conversation is remembered?",
+      "expected_files": ["app/services/generator.py", "app/config.py"],
+      "expected_symbols": ["_recent_history"],
+      "category": "generation"
+    },
+    {
+      "id": "q35",
+      "question": "What limits how much code is packed into a single request?",
+      "expected_files": ["app/services/generator.py"],
+      "expected_symbols": ["_fit_to_budget"],
+      "category": "generation"
+    },
+    {
+      "id": "q36",
+      "question": "How is a follow-up question made searchable on its own?",
+      "expected_files": ["app/services/generator.py"],
+      "expected_symbols": ["_build_search_query"],
+      "category": "generation"
+    },
+    {
+      "id": "q37",
+      "question": "Where does the application actually call the language model?",
+      "expected_files": ["app/services/llm.py"],
+      "expected_symbols": ["complete", "OpenAILLMProvider"],
+      "category": "generation"
+    },
+    {
+      "id": "q38",
+      "question": "How is the price of a single request worked out?",
+      "expected_files": ["app/services/llm.py"],
+      "expected_symbols": ["usd", "LLMResponse"],
+      "category": "generation"
+    },
+    {
+      "id": "q39",
+      "question": "How do we check that the references in an answer point at real code?",
+      "expected_files": ["app/services/citations.py"],
+      "expected_symbols": ["attach_citations"],
+      "category": "citations"
+    },
+    {
+      "id": "q40",
+      "question": "What stops array indexing in an explanation from being mistaken for a reference?",
+      "expected_files": ["app/services/citations.py"],
+      "expected_symbols": ["find_markers", "mask_code"],
+      "category": "citations"
+    },
+    {
+      "id": "q41",
+      "question": "How do we measure how much of an answer is backed by evidence?",
+      "expected_files": ["app/services/citations.py"],
+      "expected_symbols": ["citation_coverage"],
+      "category": "citations"
+    },
+    {
+      "id": "q42",
+      "question": "Where are candidates put in a better order before answering?",
+      "expected_files": ["app/services/reranker.py"],
+      "expected_symbols": ["rerank", "LLMReranker"],
+      "category": "reranking"
+    },
+    {
+      "id": "q43",
+      "question": "What happens if the ordering step returns something unusable?",
+      "expected_files": ["app/services/reranker.py"],
+      "expected_symbols": ["parse_ranking"],
+      "category": "reranking"
+    },
+    {
+      "id": "q44",
+      "question": "Where is an uploaded archive unpacked onto disk?",
+      "expected_files": ["app/services/sources.py"],
+      "expected_symbols": ["extract_zip"],
+      "category": "security"
+    },
+    {
+      "id": "q45",
+      "question": "What stops an archive from writing files outside its own folder?",
+      "expected_files": ["app/services/sources.py"],
+      "expected_symbols": ["_is_within", "extract_zip"],
+      "category": "security"
+    },
+    {
+      "id": "q46",
+      "question": "Which remote addresses are we willing to download code from?",
+      "expected_files": ["app/services/sources.py"],
+      "expected_symbols": ["parse_git_url"],
+      "category": "security"
+    },
+    {
+      "id": "q47",
+      "question": "Where are the HTTP routes for adding a codebase defined?",
+      "expected_files": ["app/api/repositories.py"],
+      "category": "api"
+    },
+    {
+      "id": "q48",
+      "question": "How does a client find out whether importing has finished?",
+      "expected_files": ["app/api/repositories.py"],
+      "expected_symbols": ["get_index_status"],
+      "category": "api"
+    },
+    {
+      "id": "q49",
+      "question": "Where is the endpoint that answers a user's question?",
+      "expected_files": ["app/api/chat.py"],
+      "expected_symbols": ["chat"],
+      "category": "api"
+    },
+    {
+      "id": "q50",
+      "question": "How does slow work avoid blocking the web request?",
+      "expected_files": ["app/api/repositories.py"],
+      "expected_symbols": ["_index_in_background"],
+      "category": "api"
+    },
+    {
+      "id": "q51",
+      "question": "Where are configurable options read from the environment?",
+      "expected_files": ["app/config.py"],
+      "expected_symbols": ["Settings", "get_settings"],
+      "category": "config"
+    },
+    {
+      "id": "q52",
+      "question": "Where do we permit the browser front end to talk to the server?",
+      "expected_files": ["app/main.py"],
+      "category": "api"
+    },
+    {
+      "id": "q53",
+      "question": "How can I check the server is alive and see what it is configured with?",
+      "expected_files": ["app/main.py"],
+      "expected_symbols": ["health"],
+      "category": "api"
+    },
+    {
+      "id": "q54",
+      "question": "How is the quality of the search itself scored?",
+      "expected_files": ["app/services/evaluation.py"],
+      "expected_symbols": ["score_question", "first_hit_rank"],
+      "category": "evaluation"
+    },
+    {
+      "id": "q55",
+      "question": "Where is the shape of the JSON returned by the API defined?",
+      "expected_files": ["app/schemas/__init__.py"],
+      "category": "api"
+    }
+  ]
+}

@@ -117,12 +117,10 @@ def test_reranking_reorders_the_candidates():
 def test_omitted_candidates_keep_their_original_relative_order():
     """Models routinely rank six of ten. Nothing may be silently lost.
 
-    top_k is 5 of 6 rather than 6 of 6, because ranking a set down to itself
-    cannot change which chunks the LLM sees and is skipped as a wasted call.
     """
-    result = ranker("[5, 3]").rerank("q", CANDIDATES, top_k=5)
+    result = ranker("[5, 3]").rerank("q", CANDIDATES, top_k=6)
 
-    assert [c.chunk_id for c in result.chunks] == [5, 3, 1, 2, 4]
+    assert [c.chunk_id for c in result.chunks] == [5, 3, 1, 2, 4, 6]
 
 
 def test_hallucinated_indices_are_ignored_not_clamped():
@@ -154,19 +152,27 @@ def test_a_failing_model_never_breaks_the_question():
     assert result.llm_calls == 0
 
 
-def test_no_call_when_there_is_nothing_to_choose_between():
-    """Reranking 3 candidates down to 3 cannot change what the LLM sees."""
+def test_reranks_even_when_every_candidate_survives():
+    """Order still matters when the set does not change.
+
+    Citation numbering and which chunk the model reads first both depend on
+    ordering, and the evaluation harness needs the full candidate list ranked
+    in order to score where the correct answer landed.
+    """
     llm = FakeLLMProvider(response="[3,2,1]")
     result = LLMReranker(llm).rerank("q", CANDIDATES[:3], top_k=3)
 
-    assert llm.calls == [], "paid for a call that could not change anything"
-    assert [c.chunk_id for c in result.chunks] == [1, 2, 3]
+    assert len(llm.calls) == 1
+    assert [c.chunk_id for c in result.chunks] == [3, 2, 1]
 
 
-def test_no_call_when_top_k_exceeds_the_candidate_count():
+def test_no_call_for_a_single_candidate():
+    """One candidate genuinely cannot be reordered."""
     llm = FakeLLMProvider(response="[1]")
-    LLMReranker(llm).rerank("q", CANDIDATES[:2], top_k=10)
-    assert llm.calls == []
+    result = LLMReranker(llm).rerank("q", CANDIDATES[:1], top_k=10)
+
+    assert llm.calls == [], "paid for a call that could not change anything"
+    assert [c.chunk_id for c in result.chunks] == [1]
 
 
 def test_empty_candidate_list():

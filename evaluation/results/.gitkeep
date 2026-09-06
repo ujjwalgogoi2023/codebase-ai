@@ -1,0 +1,13 @@
+Evaluation output lands here.
+
+Deliberately empty in version control. Every run so far used the fake embedding
+provider, whose vectors are random, so the numbers it produced measure nothing.
+Committing them -- even carrying their disclaimer -- risks someone quoting a
+figure that was never a result.
+
+Populate this directory by setting EMBEDDING_PROVIDER=openai in .env and running:
+
+    python evaluation/run_experiments.py
+
+Then commit experiments.json and experiments.md, and fill in the results table
+in the README from them.

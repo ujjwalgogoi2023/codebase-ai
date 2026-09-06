@@ -156,9 +156,13 @@ class LLMReranker(Reranker):
     ) -> RerankResult:
         original_order = [c.chunk_id for c in chunks]
 
-        # Nothing to choose between: reranking N candidates down to N or more
-        # cannot change what the LLM sees, so do not pay for the call.
-        if len(chunks) <= top_k:
+        # Nothing to reorder. Note this is `<= 1`, not `<= top_k`: even when
+        # every candidate survives, ranking still changes the ORDER they are
+        # presented in, which changes citation numbering and which chunk the
+        # model reads first. Writing the evaluation harness is what surfaced
+        # that -- it needs the whole candidate list reranked in order to score
+        # where the correct answer landed.
+        if len(chunks) <= 1:
             return RerankResult(
                 chunks=chunks[:top_k],
                 strategy=self.name,
