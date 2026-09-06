@@ -131,6 +131,21 @@ def should_ignore_dir(name: str) -> bool:
     return name.startswith(".") or name in IGNORED_DIRS
 
 
+def is_virtualenv(path: Path) -> bool:
+    """Detect a Python virtual environment by its marker file.
+
+    Name matching alone is not enough: `venv/` and `.venv/` are conventions,
+    not rules, and real projects contain `myenv/`, `env311/`, `.virtualenv/`.
+    Every one of them holds a full copy of the standard library plus every
+    installed package, so walking one is both slow and actively harmful to
+    retrieval quality.
+
+    `pyvenv.cfg` is written by the stdlib `venv` module and by virtualenv, so
+    it identifies the directory regardless of what someone named it.
+    """
+    return (path / "pyvenv.cfg").is_file()
+
+
 def should_ignore_file(name: str) -> bool:
     lowered = name.lower()
     if lowered in IGNORED_FILENAMES:
@@ -171,7 +186,11 @@ def parse_repository(
 
     for dirpath, dirnames, filenames in os.walk(root_path):
         # Prune in place so os.walk never descends into ignored trees.
-        keep_dirs = [d for d in dirnames if not should_ignore_dir(d)]
+        keep_dirs = [
+            d
+            for d in dirnames
+            if not should_ignore_dir(d) and not is_virtualenv(Path(dirpath) / d)
+        ]
         stats.dirs_pruned += len(dirnames) - len(keep_dirs)
         dirnames[:] = sorted(keep_dirs)
 

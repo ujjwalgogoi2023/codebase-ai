@@ -167,3 +167,31 @@ def test_rejects_non_directory(tmp_path: Path):
     f.write_text("x = 1\n", encoding="utf-8")
     with pytest.raises(NotADirectoryError):
         parse_repository(f)
+
+
+def test_virtualenv_is_detected_by_marker_not_by_name(tmp_path: Path):
+    """`venv/` and `.venv/` are conventions, not rules."""
+    for env_name in ("myenv", "env311", "toolchain"):
+        env = tmp_path / env_name
+        (env / "Lib").mkdir(parents=True)
+        (env / "pyvenv.cfg").write_text("home = /usr\n", encoding="utf-8")
+        (env / "Lib" / "installed_package.py").write_text("x = 1\n", encoding="utf-8")
+
+    (tmp_path / "app.py").write_text("def go():\n    return 1\n", encoding="utf-8")
+
+    files, stats = parse_repository(tmp_path)
+
+    assert [f.path for f in files] == ["app.py"]
+    assert stats.dirs_pruned == 3
+
+
+def test_directory_named_like_a_venv_without_the_marker_is_still_indexed(tmp_path: Path):
+    """Don't over-prune: a real source folder that happens to be called
+    'environment' must not vanish just because the name looks suspicious."""
+    src = tmp_path / "environment"
+    src.mkdir()
+    (src / "climate.py").write_text("def temperature():\n    return 21\n", encoding="utf-8")
+
+    files, _ = parse_repository(tmp_path)
+
+    assert [f.path for f in files] == ["environment/climate.py"]
