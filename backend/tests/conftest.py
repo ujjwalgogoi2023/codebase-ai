@@ -13,7 +13,7 @@ import pytest
 from sqlalchemy import create_engine, text
 
 from app.config import Settings
-from app.db.base import get_session_factory, init_db
+from app.db.base import drop_db, get_session_factory, init_db
 
 
 def _derive_test_url(url: str) -> str:
@@ -77,6 +77,15 @@ def database_url() -> str:
 
 @pytest.fixture(scope="session")
 def _schema(database_url: str) -> None:
+    """Rebuild the test schema from scratch once per session.
+
+    `create_all` only adds missing tables; it never alters existing ones. So
+    adding a column to a model leaves an old test database silently stale, and
+    every test fails with UndefinedColumn instead of anything informative.
+    Dropping first makes the suite immune to schema drift. Safe because the
+    `database_url` fixture refuses any database not named *_test.
+    """
+    drop_db(database_url)
     init_db(database_url)
 
 

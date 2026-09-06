@@ -51,6 +51,11 @@ class Repository(Base):
     url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     source_type: Mapped[str] = mapped_column(String(16), default="local")  # local|github|zip
 
+    # Where the code lives on disk. Recorded so a repository created via the
+    # API can be indexed later by a background task, which has no access to the
+    # upload or clone that produced it.
+    source_path: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+
     # The configuration this index was built with. Stored because vectors are
     # only comparable within a single (model, dimension) pair, and because an
     # experiment is meaningless if you cannot say what produced each number.

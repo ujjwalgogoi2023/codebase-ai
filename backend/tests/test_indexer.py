@@ -267,3 +267,19 @@ def test_progress_callback_reports_each_stage(db, sample_repo):
 
     for expected in ("parsing", "chunking", "embedding", "storing", "done"):
         assert expected in stages, f"missing progress stage: {expected}"
+
+
+def test_reindexing_the_same_row_replaces_its_index(db, sample_repo):
+    """POST /repositories/{id}/index must not double every file and chunk."""
+    from app.models import Repository
+    from app.services.indexer import run_indexing
+
+    first = index(db, sample_repo)
+    repository = db.get(Repository, first.repository_id)
+
+    second = run_indexing(db, repository, sample_repo, provider=provider())
+
+    assert second.files == first.files
+    assert second.chunks == first.chunks
+    assert db.scalar(select(func.count()).select_from(File)) == first.files
+    assert count_chunks(db, first.repository_id) == first.chunks

@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import func, insert, select
+from sqlalchemy import delete, func, insert, select
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
@@ -67,34 +67,26 @@ class IndexResult:
         }
 
 
-def index_repository(
+def create_repository(
     session: Session,
     *,
     name: str,
-    root: str | Path,
     url: str | None = None,
     source_type: str = "local",
-    provider: EmbeddingProvider | None = None,
-    settings: Settings | None = None,
+    source_path: str | Path | None = None,
+    provider: EmbeddingProvider,
     chunk_strategy: str = "code_aware",
     max_chunk_lines: int | None = None,
+    settings: Settings | None = None,
     replace_existing: bool = True,
-    progress: ProgressCallback | None = None,
-) -> IndexResult:
-    """Parse, chunk, embed and store a codebase.
+) -> Repository:
+    """Register a repository as `pending`, without doing any work.
 
-    Creates one Repository row per indexing run. `index_status` moves
-    pending -> indexing -> ready, or -> failed with `error_message` set, so a
-    caller polling the API can distinguish "still working" from "broken".
+    Split out from the indexing itself because the API needs to hand back an id
+    immediately and index in the background. A client that had to wait for a
+    large repository to finish would simply time out.
     """
     settings = settings or get_settings()
-    provider = provider or get_embedding_provider(settings)
-    max_chunk_lines = max_chunk_lines or settings.max_chunk_lines
-    started = time.perf_counter()
-
-    def report(stage: str, done: int = 0, total: int = 0) -> None:
-        if progress:
-            progress(stage, done, total)
 
     if replace_existing:
         _delete_matching(session, name, provider.model, chunk_strategy)
@@ -103,26 +95,59 @@ def index_repository(
         name=name,
         url=url,
         source_type=source_type,
+        source_path=str(source_path) if source_path else None,
         embedding_model=provider.model,
         embedding_dim=provider.dimension,
         chunk_strategy=chunk_strategy,
-        max_chunk_lines=max_chunk_lines,
-        index_status="indexing",
+        max_chunk_lines=max_chunk_lines or settings.max_chunk_lines,
+        index_status="pending",
     )
     session.add(repository)
+    session.commit()
+    return repository
+
+
+def run_indexing(
+    session: Session,
+    repository: Repository,
+    root: str | Path | None = None,
+    *,
+    provider: EmbeddingProvider,
+    settings: Settings | None = None,
+    progress: ProgressCallback | None = None,
+) -> IndexResult:
+    """Do the actual work for an existing repository row.
+
+    `index_status` moves pending -> indexing -> ready, or -> failed with
+    `error_message` set, so a client polling the API can distinguish "still
+    working" from "broken".
+    """
+    settings = settings or get_settings()
+    root = root or repository.source_path
+    if not root:
+        raise ValueError(f"Repository {repository.id} has no source path to index")
+
+    started = time.perf_counter()
+
+    def report(stage: str, done: int = 0, total: int = 0) -> None:
+        if progress:
+            progress(stage, done, total)
+
+    repository.index_status = "indexing"
+    repository.error_message = None
     session.commit()
 
     try:
         report("parsing")
         source_files, _ = parse_repository(root, max_file_bytes=settings.max_file_bytes)
         if not source_files:
-            raise ValueError(f"No indexable source files found under {root!r}")
+            raise ValueError(f"No indexable source files found under {str(root)!r}")
 
         report("chunking", 0, len(source_files))
         chunks = chunk_files(
             source_files,
-            strategy=chunk_strategy,
-            max_chunk_lines=max_chunk_lines,
+            strategy=repository.chunk_strategy,
+            max_chunk_lines=repository.max_chunk_lines,
         )
         if not chunks:
             raise ValueError("Parsing produced files but chunking produced nothing")
@@ -147,7 +172,7 @@ def index_repository(
             chunks=len(chunks),
             seconds=time.perf_counter() - started,
             embedding_model=provider.model,
-            chunk_strategy=chunk_strategy,
+            chunk_strategy=repository.chunk_strategy,
             cache_hits=getattr(provider, "hits", 0),
             cache_misses=getattr(provider, "misses", 0),
         )
@@ -164,6 +189,41 @@ def index_repository(
             failed.error_message = f"{type(exc).__name__}: {exc}"[:2000]
             session.commit()
         raise
+
+
+def index_repository(
+    session: Session,
+    *,
+    name: str,
+    root: str | Path,
+    url: str | None = None,
+    source_type: str = "local",
+    provider: EmbeddingProvider | None = None,
+    settings: Settings | None = None,
+    chunk_strategy: str = "code_aware",
+    max_chunk_lines: int | None = None,
+    replace_existing: bool = True,
+    progress: ProgressCallback | None = None,
+) -> IndexResult:
+    """Register and index in one call. Used by the CLI and by tests."""
+    settings = settings or get_settings()
+    provider = provider or get_embedding_provider(settings)
+
+    repository = create_repository(
+        session,
+        name=name,
+        url=url,
+        source_type=source_type,
+        source_path=root,
+        provider=provider,
+        chunk_strategy=chunk_strategy,
+        max_chunk_lines=max_chunk_lines,
+        settings=settings,
+        replace_existing=replace_existing,
+    )
+    return run_indexing(
+        session, repository, root, provider=provider, settings=settings, progress=progress
+    )
 
 
 def _embed_in_batches(
@@ -205,6 +265,15 @@ def _persist(
     ids). Chunks go through a bulk insert (there are thousands, and inserting
     them one ORM object at a time is dramatically slower).
     """
+    # Re-indexing an existing repository row must replace its index, not add to
+    # it. Without this, the second run hits uq_files_repo_path -- which is the
+    # constraint doing its job: the alternative to that error is an index with
+    # every file and chunk duplicated, and retrieval returning the same code
+    # twice in the top-K.
+    session.execute(delete(Chunk).where(Chunk.repository_id == repository.id))
+    session.execute(delete(File).where(File.repository_id == repository.id))
+    session.flush()
+
     file_rows = [
         File(
             repository_id=repository.id,
