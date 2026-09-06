@@ -81,15 +81,30 @@ def main() -> int:
         for line in result.answer.splitlines():
             print(f"  {line}")
 
-        if result.sources:
-            rule("SOURCES")
-            for index, source in enumerate(result.sources, start=1):
-                label = f" ({source.symbol})" if source.symbol else ""
-                print(f"  [{index}] {source.citation}{label}   score {source.score:.4f}")
+        if result.citations:
+            rule("SOURCES (cited by the answer)")
+            for citation in result.citations:
+                label = f"  ({citation.symbol})" if citation.symbol else ""
+                print(f"  [{citation.index}] {citation.citation}{label}"
+                      f"   score {citation.score:.4f}")
+
+        if result.unused_sources:
+            print(f"\n  retrieved but never cited: "
+                  + ", ".join(c.citation for c in result.unused_sources))
+
+        if result.invalid_markers:
+            rule("HALLUCINATED CITATIONS CAUGHT")
+            print(f"  the model cited {result.invalid_markers} but only "
+                  f"{len(result.sources)} sources were provided")
+            print("  these markers were removed from the answer above")
+            print(f"  raw model output: {result.raw_answer!r}")
+
         if result.sources_omitted:
             print(f"\n  ({result.sources_omitted} weaker sources dropped to fit the context budget)")
 
         rule()
+        print(f"  grounded {result.is_grounded}   "
+              f"citation coverage {result.citation_coverage:.0%}")
         print(f"  model {result.model}   provider {settings.llm_provider}")
         print(f"  tokens in {result.input_tokens}  out {result.output_tokens}"
               + (f"   ~${result.usd}" if result.usd is not None else ""))

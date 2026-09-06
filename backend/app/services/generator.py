@@ -56,6 +56,7 @@ from dataclasses import dataclass, field
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
+from app.services.citations import Citation, attach_citations, format_sources_block
 from app.services.embeddings import EmbeddingProvider, _get_encoder
 from app.services.llm import LLMProvider, LLMResponse, get_llm_provider
 from app.services.retriever import (
@@ -120,15 +121,37 @@ class GeneratedAnswer:
     # Sources dropped to fit the context budget.
     sources_omitted: int = 0
 
+    # --- stage 7: resolved citations ---
+    raw_answer: str = ""
+    citations: list[Citation] = field(default_factory=list)
+    unused_sources: list[Citation] = field(default_factory=list)
+    invalid_markers: list[int] = field(default_factory=list)
+    citation_coverage: float = 0.0
+
+    @property
+    def is_grounded(self) -> bool:
+        """A refusal is grounded by definition; an answer must cite real code."""
+        if self.no_context:
+            return True
+        return bool(self.citations) and not self.invalid_markers
+
+    def sources_block(self) -> str:
+        return format_sources_block(self.citations)
+
     def as_dict(self) -> dict:
         return {
             "question": self.question,
             "answer": self.answer,
+            "raw_answer": self.raw_answer,
             "repository_id": self.repository_id,
             "model": self.model,
             "no_context": self.no_context,
             "truncated": self.truncated,
             "sources_omitted": self.sources_omitted,
+            "is_grounded": self.is_grounded,
+            "citation_coverage": round(self.citation_coverage, 3),
+            "invalid_markers": self.invalid_markers,
+            "citations": [c.as_dict() for c in self.citations],
             "usage": {
                 "input_tokens": self.input_tokens,
                 "output_tokens": self.output_tokens,
@@ -209,6 +232,7 @@ class Generator:
             return GeneratedAnswer(
                 question=question,
                 answer=NO_CONTEXT_ANSWER,
+                raw_answer=NO_CONTEXT_ANSWER,
                 repository_id=repository_id,
                 model=self.llm.model,
                 no_context=True,
@@ -228,9 +252,19 @@ class Generator:
             max_output_tokens=self.settings.llm_max_output_tokens,
         )
 
+        # Stage 7: resolve [n] markers against the sources we actually sent.
+        # `kept` must be passed, not `search.chunks`: the budget may have
+        # dropped sources, and [3] means the third source the MODEL saw.
+        cited = attach_citations(response.text, kept)
+
         return GeneratedAnswer(
             question=question,
-            answer=response.text,
+            answer=cited.answer,
+            raw_answer=cited.raw_answer,
+            citations=cited.citations,
+            unused_sources=cited.unused_sources,
+            invalid_markers=cited.invalid_markers,
+            citation_coverage=cited.citation_coverage,
             sources=kept,
             repository_id=repository_id,
             model=response.model,
@@ -335,6 +369,7 @@ def answer_question(
 
 __all__ = [
     "SYSTEM_PROMPT",
+    "Citation",
     "NO_CONTEXT_ANSWER",
     "GeneratedAnswer",
     "Generator",
