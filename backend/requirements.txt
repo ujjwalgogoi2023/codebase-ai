@@ -1,0 +1,24 @@
+# --- Core RAG pipeline ---
+openai==2.6.1
+tiktoken==0.12.0
+
+# --- API layer ---
+fastapi==0.121.1
+uvicorn[standard]==0.38.0
+python-multipart==0.0.20
+
+# --- Config ---
+pydantic==2.12.3
+pydantic-settings==2.12.0
+python-dotenv==1.2.1
+
+# --- Database / vector store ---
+SQLAlchemy==2.0.44
+psycopg[binary]==3.2.12
+pgvector==0.4.2
+
+# --- Repo ingestion ---
+httpx==0.28.1
+
+# --- Testing ---
+pytest==8.4.2
