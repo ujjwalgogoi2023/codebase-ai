@@ -16,10 +16,56 @@ from app.config import Settings
 from app.db.base import get_session_factory, init_db
 
 
+def _derive_test_url(url: str) -> str:
+    """Point at a sibling `<name>_test` database.
+
+    Tests TRUNCATE between cases. Running them against the development database
+    would silently destroy every repository you had indexed, which is a nasty
+    surprise the first time it happens mid-demo.
+    """
+    base, separator, name = url.rpartition("/")
+    if not separator:
+        return url
+    name, question, query = name.partition("?")
+    return f"{base}/{name}_test{question}{query}"
+
+
+def _ensure_database_exists(url: str) -> None:
+    """CREATE DATABASE the test database if it is not there yet.
+
+    CREATE DATABASE cannot run inside a transaction, hence AUTOCOMMIT, and it
+    must be issued from a different database, hence the connection to
+    `postgres`.
+    """
+    base, _, name = url.rpartition("/")
+    name = name.partition("?")[0]
+    admin = create_engine(f"{base}/postgres", isolation_level="AUTOCOMMIT")
+    try:
+        with admin.connect() as connection:
+            exists = connection.execute(
+                text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": name}
+            ).scalar()
+            if not exists:
+                connection.execute(text(f'CREATE DATABASE "{name}"'))
+    finally:
+        admin.dispose()
+
+
 @pytest.fixture(scope="session")
 def database_url() -> str:
-    url = os.getenv("TEST_DATABASE_URL") or Settings().database_url
+    url = os.getenv("TEST_DATABASE_URL") or _derive_test_url(Settings().database_url)
+
+    # Safety belt: these fixtures truncate. Never let them do that to a
+    # database that was not explicitly designated for testing.
+    name = url.rpartition("/")[2].partition("?")[0]
+    if not name.endswith("_test"):
+        pytest.fail(
+            f"Refusing to run destructive tests against database {name!r}. "
+            "Set TEST_DATABASE_URL to a database whose name ends in '_test'."
+        )
+
     try:
+        _ensure_database_exists(url)
         engine = create_engine(url, pool_pre_ping=True)
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))

@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     top_k: int = 10          # candidates pulled from the vector index
     rerank_top_k: int = 3    # survivors actually shown to the LLM
 
+    # HNSW explores a wider slice of the graph as this rises: better recall,
+    # slower queries. It is a real accuracy/latency dial, not a constant, so
+    # the evaluation harness can sweep it.
+    hnsw_ef_search: int = 64
+
     # --- Indexing limits ---
     max_file_bytes: int = 1_000_000
     max_chunk_lines: int = 120
