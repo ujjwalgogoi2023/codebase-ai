@@ -46,8 +46,26 @@ class Settings(BaseSettings):
     embedding_dim: int = 1536
 
     # --- Generation ---
+    # "openai" for real answers, "fake" for scripted offline responses.
     llm_provider: str = "openai"
     llm_model: str = "gpt-4o-mini"
+
+    # Zero temperature on purpose. A grounded answer should be reproducible:
+    # the same question over the same code should give the same answer, or the
+    # evaluation numbers in section 20 measure sampling noise as much as
+    # retrieval quality.
+    llm_temperature: float = 0.0
+    llm_max_output_tokens: int = 1_000
+    llm_max_retries: int = 4
+
+    # Budget for retrieved code in the prompt. Context is not free: it costs
+    # money, adds latency, and past a point actively hurts, because the useful
+    # chunk gets buried among mediocre ones.
+    max_context_tokens: int = 8_000
+
+    # How many prior turns of a conversation to replay. Enough for "how does it
+    # validate the token?" to make sense; not so many that old turns dominate.
+    max_history_turns: int = 6
 
     # --- Retrieval ---
     top_k: int = 10          # candidates pulled from the vector index
