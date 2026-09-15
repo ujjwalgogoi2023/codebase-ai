@@ -293,17 +293,27 @@ def _brace_depths(lines: list[str]) -> tuple[list[int], list[str]]:
     return depths, masked
 
 
+def _first_token(line: str) -> str:
+    """The first word before any '(' on the line, or "" if there isn't one.
+
+    Returning "" rather than indexing blindly matters: a line can legitimately
+    begin with '(' -- an IIFE, or an arrow function whose parameter list starts
+    the line -- in which case there is no leading word at all. An earlier
+    version did `split("(")[0].split()[0]` and raised IndexError on the first
+    TypeScript file that opened a line with a paren.
+    """
+    head = line.split("(")[0].split()
+    return head[0] if head else ""
+
+
 def _match_declaration(line: str, language: str, at_top_level: bool) -> tuple[str, str] | None:
     """Return (symbol, kind) if this line opens a declaration we care about."""
-    stripped = line.strip()
-    first_token = stripped.split("(")[0].split()[0] if stripped else ""
-
     if language == "java":
         m = _JAVA_TYPE.match(line)
         if m:
             return m.group("name"), "class"
         m = _JAVA_METHOD.match(line)
-        if m and first_token not in _CONTROL_KEYWORDS:
+        if m and _first_token(line) not in _CONTROL_KEYWORDS:
             return m.group("name"), "method"
         return None
 

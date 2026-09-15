@@ -488,3 +488,55 @@ def test_chunk_files_preserves_file_order():
 
 def test_empty_file_produces_no_chunks():
     assert chunk_file(make_file("")) == []
+
+
+# ---------------------------------------------------------------------------
+# Regression: lines that begin with '(' (found by indexing a real TS project)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "(async () => {",
+        "(a, b) => a + b;",
+        "() => {}",
+        "(",
+        "  (x) => x",
+    ],
+)
+def test_lines_starting_with_a_paren_do_not_crash(line):
+    """`split("(")[0].split()[0]` raised IndexError: there is no leading word."""
+    from app.services.chunker import _first_token, _match_declaration
+
+    assert _first_token(line) == ""
+    # Must not raise for any language that consults the first token.
+    for language in ("java", "javascript", "typescript"):
+        _match_declaration(line, language, at_top_level=True)
+
+
+def test_typescript_file_opening_with_an_iife_chunks_cleanly():
+    sf = make_file(
+        """
+        (async () => {
+          const res = await fetch("/api/health");
+          console.log(await res.json());
+        })();
+
+        export function helper(x: number): number {
+          return x * 2;
+        }
+        """,
+        path="boot.ts",
+        language="typescript",
+    )
+
+    chunks = chunk_file(sf, min_chunk_lines=1)
+
+    assert chunks, "file produced no chunks"
+    assert "helper" in by_symbol(chunks)
+    covered: set[int] = set()
+    for c in chunks:
+        covered.update(range(c.start_line, c.end_line + 1))
+    lines = sf.content.splitlines()
+    missing = [i + 1 for i, l in enumerate(lines) if l.strip() and (i + 1) not in covered]
+    assert not missing, f"lines dropped: {missing}"
