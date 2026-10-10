@@ -69,7 +69,7 @@ shortlist.
 | Generation | `qwen2.5:7b` via Ollama, or OpenAI `gpt-4o-mini` |
 | Frontend | React 19, Vite, Tailwind 4 |
 | Infra | Docker Compose |
-| Tests | pytest — **303 tests** |
+| Tests | pytest — **330 tests** |
 
 Providers are an `.env` change: `ollama` (free, local), `openai`, or `fake`
 (offline, for tests). Every number in this README was measured on the local
@@ -115,6 +115,16 @@ Verified on 1,287 real files (fastapi, sqlalchemy, openai, this backend):
 system that says *"that code doesn't exist"* about code that does — the worst
 RAG failure, because a wrong refusal is indistinguishable from a right one.
 
+**Referenced definitions.** Cutting on syntax separates a function from the
+constants it reads: `login()` is one chunk, `MAX_FAILED_ATTEMPTS = 5` is part
+of another near the top of the file. Retrieval finds `login()`, and the model
+sees `if failed >= MAX_FAILED_ATTEMPTS` with no number anywhere. So each Python
+chunk also records the short module-level constants and helper functions
+(up to 6 lines) it uses from the same file. They are shown to the model beside
+the chunk, but are **not** embedded and **not** part of the chunk's line range,
+so retrieval and citations are unchanged. A repository indexed before this
+existed picks it up on its next re-index.
+
 ### 3. Embeddings
 Batched, with per-input token truncation and jittered exponential backoff.
 Results are sorted by the API's `index` field rather than trusting arrival
@@ -157,6 +167,17 @@ two exist.
 
 Conversation history is replayed so pronouns resolve, but **every question runs
 its own search**. History is not a substitute for retrieval.
+
+**Follow-ups are rewritten before anything else happens.** "Which constant
+controls that?" cannot be searched, and replaying history alone was not enough:
+after a turn about late fees, the right code was retrieved and the model still
+answered about an unrelated constant in its third source. So a follow-up is
+first rewritten by the model into one standalone question ("Which constant
+controls the late fee per day?"), and that question is what gets searched,
+reranked and answered. It costs one extra call per follow-up and fails soft: an
+error, or a "rewrite" that is really an answer, falls back to prepending the
+previous question. `QUERY_REWRITER=concat` keeps the old behaviour as a
+control.
 
 ### 7. Citations
 The model is shown numbered sources and cites `[1]`, `[2]` — it picks an index
@@ -381,6 +402,40 @@ The harness keeps its own results honest: `EvalReport.is_meaningful` is
 the generated Markdown carry a disclaimer automatically, so a meaningless run
 cannot be mistaken for a result.
 
+### Answer quality
+
+Retrieval accuracy is the ceiling, not the product. The answers themselves were
+tested end to end through `/chat` on a private 247-file Python and TypeScript
+application: 14 questions whose answers were checked by hand against its
+source, plus 5 about features it does not have (Stripe, GraphQL, Google OAuth,
+Elasticsearch, and a class-timetable feature that a migration had removed).
+
+| | Before the two fixes | After |
+|---|---:|---:|
+| Right file among the 3 chunks sent | 14/14 | 14/14 |
+| Right file cited | 13/14 | 13/14 |
+| **Key facts in the answer** | **8/14** | **11/14** |
+| Said "not shown" when it was there | 3/14 | 1/14 |
+| Correctly refused a missing feature | 5/5 | 5/5 |
+| Fabricated citations | 0 | 0 |
+
+- **Missing values were reported, not guessed.** Where the number was not in
+  the sources, the answer named the constant it could see
+  (`MAX_FAILED_ATTEMPTS`, `settings.otp_ttl_minutes`) and said its value was
+  not shown.
+- **Referenced definitions fixed the most common gap**: retrieval found the
+  right function, but the value the question asked for lived in a constant in
+  another chunk. Login lockout, code generation and the release cooldown are
+  now answered with their actual values.
+- **What is still missed**: a value defined in a *different* file (token
+  lifetimes live in `config.py`), and supporting code that does not make the
+  3-source cut. Sending 5 sources instead of 3 recovered none of them; the
+  extra slots filled with tests and docs.
+- **Follow-up rewriting** fixed the failing case above. On six realistic
+  follow-ups the two strategies tied 5/6, because a follow-up that names its
+  subject ("...if Redis is unavailable?") already searches well. Rewriting
+  matters for the ones that do not.
+
 ---
 
 ## Design decisions
@@ -446,7 +501,7 @@ backend/
                   sources, evaluation
     config.py     typed settings from .env
     main.py       FastAPI app
-  tests/          303 tests
+  tests/          330 tests
 frontend/         React + Vite + Tailwind
 evaluation/       datasets (own backend, Flask), harness, experiment runner,
                   results/
@@ -479,7 +534,7 @@ earlier, in retrieval.
 cd backend && ../.venv/Scripts/python -m pytest
 ```
 
-303 tests. Database-backed tests use a separate `_test` database, created on
+330 tests. Database-backed tests use a separate `_test` database, created on
 demand, and the suite **refuses to run** against any database whose name doesn't
 end in `_test` — an earlier version truncated the development database on every
 run.
