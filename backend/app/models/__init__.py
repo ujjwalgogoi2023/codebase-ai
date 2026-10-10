@@ -137,11 +137,13 @@ class Chunk(Base):
     )
 
     # Denormalized from files. Reaching the repository through a join would be
-    # correct, but a filtered vector search then needs `JOIN files ON ...` in
-    # the same query as the ANN scan, and the planner tends to abandon the HNSW
-    # index for a sequential scan when it does. One redundant integer column
-    # keeps "search only inside repository N" fast, which is the single most
-    # common query this system runs.
+    # correct, but "search only inside repository N" -- the single most common
+    # query this system runs -- would then need `JOIN files ON ...`. With the
+    # column, EXPLAIN ANALYZE shows Postgres serving that query through this
+    # column's B-tree index and an exact distance sort over the repository's
+    # rows; at a few thousand chunks per repository the HNSW index is not used
+    # at all, so per-repository search is exact. HNSW (and its post-filtering)
+    # only comes into play for much larger repositories.
     repository_id: Mapped[int] = mapped_column(
         ForeignKey("repositories.id", ondelete="CASCADE"), index=True
     )

@@ -38,6 +38,14 @@ HNSW is an approximate nearest-neighbour index: it can miss a true neighbour.
 `hnsw.ef_search` controls how much of the graph is explored — higher means
 better recall and slower queries. It is exposed as a setting because it is a
 genuine tradeoff, not a constant.
+
+In practice, at today's sizes, the planner answers a per-repository search
+without the HNSW index: it reads the repository's rows through the
+`repository_id` B-tree and sorts them by exact distance, so results are exact
+and `ef_search` has no effect. It starts to matter only when a single
+repository is large enough for the planner to prefer the graph, and then the
+repository filter is applied after the walk (see pgvector's
+`hnsw.iterative_scan`).
 """
 
 from __future__ import annotations

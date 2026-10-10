@@ -141,13 +141,27 @@ delete across two systems with no shared transaction — and any failure between
 them leaves orphaned vectors that retrieval returns forever.
 
 `repository_id`, `language` and `file_path` are denormalised onto `chunks` so a
-filtered search needs no join: the query planner tends to abandon the HNSW
-index for a sequential scan when one is present.
+filtered search needs no join.
+
+**What the query plan actually shows.** The original reasoning was that the
+column keeps per-repository search on the HNSW index. `EXPLAIN ANALYZE` says
+otherwise at this scale: for "search inside repository N", Postgres (pgvector
+0.8.6) never touches the HNSW index. It fetches that repository's rows through
+the B-tree on `repository_id` — 1,888 for the largest indexed app — and sorts
+them by exact distance. So per-repository search is currently **exact, with
+perfect recall**, and still fast. The denormalised column pays off by making
+that scan cheap and join-free.
+
+HNSW only takes over when one repository is far larger. Then the filter is
+applied *after* the graph walk, which examines about `ef_search` candidates
+from every repository, so it can return fewer than `top_k` results or miss
+closer ones. pgvector 0.8's `hnsw.iterative_scan` setting, or partitioning
+`chunks` by repository, is the fix if that day comes.
 
 ### 5. Retrieval
 Cosine distance via pgvector's `<=>`, with metadata filters (language, kind,
 path prefix, minimum score) applied as ordinary SQL predicates in the same
-query as the ANN scan.
+query as the vector search.
 
 Refuses to search if the repository was indexed with a **different embedding
 model**. Vectors of equal dimension from different models still "work" — they
@@ -256,6 +270,14 @@ LLM_MODEL=qwen2.5-8k
 
 Changing `EMBEDDING_DIM` changes the width of the vector column, so recreate the
 schema afterwards with `python scripts/init_db.py --reset`.
+
+**One untested gain.** `qwen3-embedding` was trained with a task instruction in
+front of each *query* (`{Instruction} {Query}`; documents are embedded as-is),
+per its technical report ([arXiv:2506.05176](https://arxiv.org/abs/2506.05176)).
+CodebaseAI currently sends bare questions. Retrieval works without the
+instruction — every number in this README was measured that way — but adding
+one, such as "Given a question about a codebase, retrieve the code that answers
+it", is likely a small free improvement. It has not been measured yet.
 
 **Why the 8k variant.** Ollama defaults to a 4096-token context and silently
 drops the *start* of a longer prompt — which is where the grounding instructions
@@ -472,6 +494,68 @@ features were refused, and the follow-up strategies tied 4/4. The misses are
 the test-file problem again: `test_zip_bomb_is_rejected_before_extraction`
 and its neighbours took the slots meant for the code that defines the values,
 and 64% of this backend's chunks are tests.
+
+### How much retrieval depends on names
+
+What happens on a poorly written codebase — meaningless names, no docstrings,
+no comments? To measure it rather than guess, Flask's 24 source files were
+obfuscated with Python's AST: all 701 names Flask defines (classes, functions,
+methods, parameters, variables, attributes) renamed consistently across files,
+and all docstrings, comments and type hints removed. Library calls (werkzeug,
+jinja2, click, itsdangerous) and string literals were kept, as they would be in
+real badly written code. The same 45 held-out Flask questions were then run on
+source files only, so test files could not crowd the results.
+
+```python
+# before
+def should_set_cookie(self, app: Flask, session: SessionMixin) -> bool:
+    """Used by session backends to determine if a ``Set-Cookie`` header ..."""
+    return session.modified or (
+        session.permanent and app.config["SESSION_REFRESH_EACH_REQUEST"]
+    )
+
+# after
+def f203(self, f45, f196):
+    return f196.v261 or (f196.f167 and f45.v126['SESSION_REFRESH_EACH_REQUEST'])
+```
+
+| Condition | Top-1 | Top-3 | Top-5 | MRR |
+|---|---:|---:|---:|---:|
+| **A** · clean | 82.2% | 95.6% | 97.8% | 0.889 |
+| A · clean, reranked | **93.3%** | **100%** | **100%** | **0.963** |
+| **B** · names, docstrings, comments removed | 75.6% | 86.7% | 91.1% | 0.828 |
+| B · reranked | 73.3% | 88.9% | 91.1% | 0.818 |
+| **C** · B, plus files renamed `m01.py`… | 60.0% | 82.2% | 91.1% | 0.727 |
+| C · reranked | 60.0% | 84.4% | 91.1% | 0.734 |
+| **D** · C, plus an LLM summary embedded with each chunk | 66.7% | 80.0% | 88.9% | 0.757 |
+| D · reranked | 66.7% | 86.7% | 91.1% | 0.778 |
+
+One question is about 2 points, so differences of a few points are one or two
+questions.
+
+- **It degrades, it does not collapse.** With reranking, Top-1 fell from 93%
+  to 60% and Top-3 from 100% to 84%, but the right file still reached the top
+  5 for nine questions in ten. Library calls and string literals carry
+  meaning that renaming cannot remove.
+- **File paths are a large signal on their own.** Renaming the files cost 13–16
+  points of Top-1 beyond renaming everything inside them — `sessions.py` says a
+  lot. It is also the cheapest thing to get right in a real codebase.
+- **The reranker needs meaning to read.** It added 11 points of Top-1 on clean
+  code and nothing once names were gone: it ranks from code previews, and
+  `f196.v261` gives it nothing to judge.
+- **LLM chunk summaries recovered little.** A few points of Top-1 and MRR,
+  within the noise, with Top-3 slightly down before reranking. A summary of
+  meaningless code is generic; it cannot restore intent that is no longer in
+  the text. The test was tilted *in the summaries' favour* — the summarising
+  model recognised the obfuscated code as Flask — so on genuinely unfamiliar
+  code expect even less. They are also slow locally: 251 chunks took 32
+  minutes.
+
+So the levers that matter for hard-to-read code are mostly in the code itself
+— meaningful file names and docstrings — plus a keyword index for the string
+literals that survive obfuscation, rather than summarising chunks after the
+fact. This was a one-off experiment: its obfuscator and runner live outside
+this repository and are not part of the evaluation suite.
 
 ---
 
