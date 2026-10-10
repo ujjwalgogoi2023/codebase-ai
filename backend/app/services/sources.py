@@ -207,9 +207,7 @@ def clone_repository(url: str, destination: str | Path) -> Path:
             text=True,
             timeout=CLONE_TIMEOUT_SECONDS,
             check=False,
-            # Stops git from opening a credential prompt and hanging forever on
-            # a private or nonexistent repository.
-            env={"GIT_TERMINAL_PROMPT": "0", "PATH": _system_path()},
+            env=_git_env(),
         )
     except FileNotFoundError as exc:
         raise SourceError("git is not installed or not on PATH") from exc
@@ -230,10 +228,28 @@ def clone_repository(url: str, destination: str | Path) -> Path:
     return target
 
 
-def _system_path() -> str:
+# Passed through to git; everything else in the server's environment is not.
+# A minimal environment keeps stray GIT_* variables (GIT_SSH_COMMAND,
+# GIT_CONFIG_*) from changing what a clone does. But it cannot be empty:
+# Windows sockets fail to initialise without SYSTEMROOT, which surfaces as the
+# misleading "Could not resolve host: github.com".
+_GIT_ENV_PASSTHROUGH = (
+    "PATH",
+    "SYSTEMROOT",
+    "HTTPS_PROXY", "https_proxy",
+    "HTTP_PROXY", "http_proxy",
+    "NO_PROXY", "no_proxy",
+)
+
+
+def _git_env() -> dict[str, str]:
     import os
 
-    return os.environ.get("PATH", "")
+    env = {k: os.environ[k] for k in _GIT_ENV_PASSTHROUGH if k in os.environ}
+    # Stops git from opening a credential prompt and hanging forever on a
+    # private or nonexistent repository.
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    return env
 
 
 def repository_name_from_url(url: str) -> str:

@@ -15,6 +15,7 @@ import pytest
 from app.services.sources import (
     MAX_ARCHIVE_MEMBERS,
     SourceError,
+    _git_env,
     _is_within,
     extract_zip,
     parse_git_url,
@@ -178,3 +179,20 @@ def test_rejects_hosts_off_the_allowlist():
 
 def test_repository_name_from_url():
     assert repository_name_from_url("https://github.com/psf/requests") == "psf/requests"
+
+
+def test_git_env_keeps_what_networking_needs_and_drops_the_rest(monkeypatch):
+    # Without SYSTEMROOT, git on Windows cannot resolve any host at all.
+    monkeypatch.setenv("SYSTEMROOT", r"C:\Windows")
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.internal:3128")
+    monkeypatch.setenv("GIT_SSH_COMMAND", "ssh -o ProxyCommand=evil")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
+
+    env = _git_env()
+
+    assert env["SYSTEMROOT"] == r"C:\Windows"
+    assert env["HTTPS_PROXY"] == "http://proxy.internal:3128"
+    assert env["GIT_TERMINAL_PROMPT"] == "0"
+    assert "PATH" in env
+    assert "GIT_SSH_COMMAND" not in env
+    assert "OPENAI_API_KEY" not in env
