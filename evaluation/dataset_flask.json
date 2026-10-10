@@ -1,0 +1,530 @@
+{
+  "repository": "flask-3.1.3",
+  "source_path": "data/eval_repos/flask",
+  "description": "Held-out retrieval evaluation set, labelled against Flask 3.1.3 (pallets/flask). Written before any configuration was run on this repository, so no setting was tuned against it. Questions avoid quoting identifiers. Fetch the corpus with: git clone --depth 1 --branch 3.1.3 https://github.com/pallets/flask data/eval_repos/flask",
+  "labelling_notes": [
+    "expected_files lists every file that legitimately answers the question.",
+    "Paths are relative to the repository root and matched by suffix.",
+    "Only source files under src/flask are labelled; a test file that exercises the right behaviour still counts as a miss."
+  ],
+  "questions": [
+    {
+      "id": "f01",
+      "question": "How are signed session cookies created and read back on the next request?",
+      "expected_files": [
+        "src/flask/sessions.py"
+      ],
+      "expected_symbols": [
+        "SecureCookieSessionInterface"
+      ],
+      "category": "sessions"
+    },
+    {
+      "id": "f02",
+      "question": "Where is it decided whether the session cookie needs to be written to the response at all?",
+      "expected_files": [
+        "src/flask/sessions.py"
+      ],
+      "expected_symbols": [
+        "SessionInterface.should_set_cookie"
+      ],
+      "category": "sessions"
+    },
+    {
+      "id": "f03",
+      "question": "How are values like datetimes, UUIDs and tuples preserved when stored in the session?",
+      "expected_files": [
+        "src/flask/json/tag.py"
+      ],
+      "expected_symbols": [
+        "TaggedJSONSerializer"
+      ],
+      "category": "sessions"
+    },
+    {
+      "id": "f04",
+      "question": "How can configuration be loaded from environment variables that share a common prefix?",
+      "expected_files": [
+        "src/flask/config.py"
+      ],
+      "expected_symbols": [
+        "Config.from_prefixed_env"
+      ],
+      "category": "config"
+    },
+    {
+      "id": "f05",
+      "question": "How do I load settings from a Python file whose path is given by an environment variable?",
+      "expected_files": [
+        "src/flask/config.py"
+      ],
+      "expected_symbols": [
+        "Config.from_envvar"
+      ],
+      "category": "config"
+    },
+    {
+      "id": "f06",
+      "question": "How can I pull only the config keys that start with a given namespace into a dict?",
+      "expected_files": [
+        "src/flask/config.py"
+      ],
+      "expected_symbols": [
+        "Config.get_namespace"
+      ],
+      "category": "config"
+    },
+    {
+      "id": "f07",
+      "question": "How does the command line tool find the application object when the user did not name one?",
+      "expected_files": [
+        "src/flask/cli.py"
+      ],
+      "expected_symbols": [
+        "find_best_app",
+        "locate_app"
+      ],
+      "category": "cli"
+    },
+    {
+      "id": "f08",
+      "question": "Where are .env and .flaskenv files loaded before running a command?",
+      "expected_files": [
+        "src/flask/cli.py"
+      ],
+      "expected_symbols": [
+        "load_dotenv"
+      ],
+      "category": "cli"
+    },
+    {
+      "id": "f09",
+      "question": "Which command prints every registered URL rule with its methods and endpoint?",
+      "expected_files": [
+        "src/flask/cli.py"
+      ],
+      "expected_symbols": [
+        "routes_command"
+      ],
+      "category": "cli"
+    },
+    {
+      "id": "f10",
+      "question": "How are HTTPS certificate and key options validated when starting the development server?",
+      "expected_files": [
+        "src/flask/cli.py"
+      ],
+      "expected_symbols": [
+        "CertParamType",
+        "_validate_key"
+      ],
+      "category": "cli"
+    },
+    {
+      "id": "f11",
+      "question": "How do third-party packages add their own commands to the command line tool?",
+      "expected_files": [
+        "src/flask/cli.py"
+      ],
+      "expected_symbols": [
+        "FlaskGroup._load_plugin_commands"
+      ],
+      "category": "cli"
+    },
+    {
+      "id": "f12",
+      "question": "How is a one-off message stored for the user and shown on the next page?",
+      "expected_files": [
+        "src/flask/helpers.py"
+      ],
+      "expected_symbols": [
+        "flash",
+        "get_flashed_messages"
+      ],
+      "category": "helpers"
+    },
+    {
+      "id": "f13",
+      "question": "How does serving a file from a directory stop someone from requesting files outside it?",
+      "expected_files": [
+        "src/flask/helpers.py"
+      ],
+      "expected_symbols": [
+        "send_from_directory"
+      ],
+      "category": "helpers"
+    },
+    {
+      "id": "f14",
+      "question": "How is the browser cache lifetime chosen for static files?",
+      "expected_files": [
+        "src/flask/app.py",
+        "src/flask/blueprints.py"
+      ],
+      "expected_symbols": [
+        "Flask.get_send_file_max_age"
+      ],
+      "category": "helpers"
+    },
+    {
+      "id": "f15",
+      "question": "How do I generate the URL for a view function, including an absolute external URL?",
+      "expected_files": [
+        "src/flask/helpers.py",
+        "src/flask/app.py"
+      ],
+      "expected_symbols": [
+        "url_for",
+        "Flask.url_for"
+      ],
+      "category": "routing"
+    },
+    {
+      "id": "f16",
+      "question": "What happens when building a URL for an endpoint fails?",
+      "expected_files": [
+        "src/flask/sansio/app.py",
+        "src/flask/app.py"
+      ],
+      "expected_symbols": [
+        "App.handle_url_build_error"
+      ],
+      "category": "routing"
+    },
+    {
+      "id": "f17",
+      "question": "How does the route decorator register a view function for a URL?",
+      "expected_files": [
+        "src/flask/sansio/scaffold.py",
+        "src/flask/sansio/app.py"
+      ],
+      "expected_symbols": [
+        "Scaffold.route",
+        "App.add_url_rule"
+      ],
+      "category": "routing"
+    },
+    {
+      "id": "f18",
+      "question": "How is the endpoint name worked out when the developer does not provide one?",
+      "expected_files": [
+        "src/flask/sansio/scaffold.py"
+      ],
+      "expected_symbols": [
+        "_endpoint_from_view_func"
+      ],
+      "category": "routing"
+    },
+    {
+      "id": "f19",
+      "question": "Where is it enforced that routes and handlers cannot be registered after the app has started serving requests?",
+      "expected_files": [
+        "src/flask/sansio/scaffold.py",
+        "src/flask/sansio/app.py"
+      ],
+      "expected_symbols": [
+        "setupmethod",
+        "App._check_setup_finished"
+      ],
+      "category": "routing"
+    },
+    {
+      "id": "f20",
+      "question": "How is an exception matched to the error handler registered for it?",
+      "expected_files": [
+        "src/flask/sansio/app.py",
+        "src/flask/app.py"
+      ],
+      "expected_symbols": [
+        "App._find_error_handler",
+        "Flask.handle_user_exception"
+      ],
+      "category": "errors"
+    },
+    {
+      "id": "f21",
+      "question": "What happens to an unhandled exception, and how does that differ in debug mode?",
+      "expected_files": [
+        "src/flask/app.py"
+      ],
+      "expected_symbols": [
+        "Flask.handle_exception"
+      ],
+      "category": "errors"
+    },
+    {
+      "id": "f22",
+      "question": "How are HTTP errors like 404 turned into responses?",
+      "expected_files": [
+        "src/flask/app.py"
+      ],
+      "expected_symbols": [
+        "Flask.handle_http_exception"
+      ],
+      "category": "errors"
+    },
+    {
+      "id": "f23",
+      "question": "What is the WSGI entry point that sets up the context and dispatches each request?",
+      "expected_files": [
+        "src/flask/app.py"
+      ],
+      "expected_symbols": [
+        "Flask.wsgi_app"
+      ],
+      "category": "request"
+    },
+    {
+      "id": "f24",
+      "question": "How do functions registered to run before a request get called, and can one of them skip the view?",
+      "expected_files": [
+        "src/flask/app.py"
+      ],
+      "expected_symbols": [
+        "Flask.preprocess_request"
+      ],
+      "category": "request"
+    },
+    {
+      "id": "f25",
+      "question": "How are after-request hooks applied to the outgoing response?",
+      "expected_files": [
+        "src/flask/app.py"
+      ],
+      "expected_symbols": [
+        "Flask.process_response"
+      ],
+      "category": "request"
+    },
+    {
+      "id": "f26",
+      "question": "How does the return value of a view, such as a tuple, dict or string, become a response object?",
+      "expected_files": [
+        "src/flask/app.py"
+      ],
+      "expected_symbols": [
+        "Flask.make_response"
+      ],
+      "category": "request"
+    },
+    {
+      "id": "f27",
+      "question": "How is the automatic response to an OPTIONS request built?",
+      "expected_files": [
+        "src/flask/app.py"
+      ],
+      "expected_symbols": [
+        "Flask.make_default_options_response"
+      ],
+      "category": "request"
+    },
+    {
+      "id": "f28",
+      "question": "How are async view functions executed?",
+      "expected_files": [
+        "src/flask/app.py"
+      ],
+      "expected_symbols": [
+        "Flask.ensure_sync",
+        "Flask.async_to_sync"
+      ],
+      "category": "request"
+    },
+    {
+      "id": "f29",
+      "question": "Where are the limits on request body size and form memory enforced?",
+      "expected_files": [
+        "src/flask/wrappers.py"
+      ],
+      "expected_symbols": [
+        "Request.max_content_length",
+        "Request.max_form_memory_size"
+      ],
+      "category": "request"
+    },
+    {
+      "id": "f30",
+      "question": "What happens when a request claims to be JSON but the body cannot be parsed?",
+      "expected_files": [
+        "src/flask/wrappers.py"
+      ],
+      "expected_symbols": [
+        "Request.on_json_loading_failed"
+      ],
+      "category": "request"
+    },
+    {
+      "id": "f31",
+      "question": "How are the routes of a blueprint recorded and only applied once the blueprint is attached to an app?",
+      "expected_files": [
+        "src/flask/sansio/blueprints.py"
+      ],
+      "expected_symbols": [
+        "Blueprint.record",
+        "BlueprintSetupState"
+      ],
+      "category": "blueprints"
+    },
+    {
+      "id": "f32",
+      "question": "How are a URL prefix and subdomain applied to the routes of a blueprint?",
+      "expected_files": [
+        "src/flask/sansio/blueprints.py"
+      ],
+      "expected_symbols": [
+        "BlueprintSetupState.add_url_rule"
+      ],
+      "category": "blueprints"
+    },
+    {
+      "id": "f33",
+      "question": "How can one blueprint be nested inside another?",
+      "expected_files": [
+        "src/flask/sansio/blueprints.py"
+      ],
+      "expected_symbols": [
+        "Blueprint.register_blueprint",
+        "Blueprint.register"
+      ],
+      "category": "blueprints"
+    },
+    {
+      "id": "f34",
+      "question": "How are class-based views with one method per HTTP verb dispatched?",
+      "expected_files": [
+        "src/flask/views.py"
+      ],
+      "expected_symbols": [
+        "MethodView.dispatch_request"
+      ],
+      "category": "views"
+    },
+    {
+      "id": "f35",
+      "question": "How is a class-based view turned into a function that can be used as a route?",
+      "expected_files": [
+        "src/flask/views.py"
+      ],
+      "expected_symbols": [
+        "View.as_view"
+      ],
+      "category": "views"
+    },
+    {
+      "id": "f36",
+      "question": "How is the application context pushed and popped, and what is the per-request scratch namespace?",
+      "expected_files": [
+        "src/flask/ctx.py"
+      ],
+      "expected_symbols": [
+        "AppContext",
+        "_AppCtxGlobals"
+      ],
+      "category": "context"
+    },
+    {
+      "id": "f37",
+      "question": "How can code inside a view register a function to modify the response that has not been created yet?",
+      "expected_files": [
+        "src/flask/ctx.py"
+      ],
+      "expected_symbols": [
+        "after_this_request"
+      ],
+      "category": "context"
+    },
+    {
+      "id": "f38",
+      "question": "How can a background greenlet or thread keep access to the current request?",
+      "expected_files": [
+        "src/flask/ctx.py"
+      ],
+      "expected_symbols": [
+        "copy_current_request_context"
+      ],
+      "category": "context"
+    },
+    {
+      "id": "f39",
+      "question": "How does the default JSON encoder handle dates, decimals and dataclasses?",
+      "expected_files": [
+        "src/flask/json/provider.py"
+      ],
+      "expected_symbols": [
+        "_default"
+      ],
+      "category": "json"
+    },
+    {
+      "id": "f40",
+      "question": "How is a JSON response built with the right mimetype and optional pretty printing?",
+      "expected_files": [
+        "src/flask/json/provider.py",
+        "src/flask/json/__init__.py"
+      ],
+      "expected_symbols": [
+        "DefaultJSONProvider.response",
+        "jsonify"
+      ],
+      "category": "json"
+    },
+    {
+      "id": "f41",
+      "question": "How are templates looked up across the application and all of its blueprints?",
+      "expected_files": [
+        "src/flask/templating.py"
+      ],
+      "expected_symbols": [
+        "DispatchingJinjaLoader"
+      ],
+      "category": "templates"
+    },
+    {
+      "id": "f42",
+      "question": "How do request, session and g become available inside every template?",
+      "expected_files": [
+        "src/flask/templating.py",
+        "src/flask/app.py"
+      ],
+      "expected_symbols": [
+        "_default_template_ctx_processor",
+        "Flask.update_template_context"
+      ],
+      "category": "templates"
+    },
+    {
+      "id": "f43",
+      "question": "How can I find out why a template could not be found?",
+      "expected_files": [
+        "src/flask/debughelpers.py",
+        "src/flask/templating.py"
+      ],
+      "expected_symbols": [
+        "explain_template_loading_attempts"
+      ],
+      "category": "templates"
+    },
+    {
+      "id": "f44",
+      "question": "How does the test client let a test read and modify the session?",
+      "expected_files": [
+        "src/flask/testing.py"
+      ],
+      "expected_symbols": [
+        "FlaskClient.session_transaction"
+      ],
+      "category": "testing"
+    },
+    {
+      "id": "f45",
+      "question": "How is the application logger set up and where does it write by default?",
+      "expected_files": [
+        "src/flask/logging.py"
+      ],
+      "expected_symbols": [
+        "create_logger"
+      ],
+      "category": "logging"
+    }
+  ]
+}

@@ -4,7 +4,9 @@ Usage:
     python evaluation/run_experiments.py
     python evaluation/run_experiments.py --quick
 
-Writes results/experiments.json and results/experiments.md.
+Writes results/experiments.json and results/experiments.md. Another dataset
+writes alongside rather than over them: dataset_flask.json produces
+results/experiments_flask.*.
 
 The point of this file is that "code-aware chunking is better" and "reranking
 helps" are HYPOTHESES until something measures them. Each row below changes
@@ -84,7 +86,8 @@ def main() -> int:
         )
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    (RESULTS_DIR / "experiments.json").write_text(
+    suffix = Path(args.dataset).stem.removeprefix("dataset")
+    (RESULTS_DIR / f"experiments{suffix}.json").write_text(
         json.dumps([r.as_dict() for r in reports], indent=2), encoding="utf-8"
     )
 
@@ -99,7 +102,7 @@ def main() -> int:
             "`EMBEDDING_PROVIDER=openai` to measure anything real.\n"
         )
     )
-    (RESULTS_DIR / "experiments.md").write_text(
+    (RESULTS_DIR / f"experiments{suffix}.md").write_text(
         f"# Retrieval experiments\n\n"
         f"{len(questions)} questions, dataset `{Path(args.dataset).name}`.\n"
         f"{disclaimer}\n{table}",
