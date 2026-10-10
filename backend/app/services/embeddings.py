@@ -63,6 +63,10 @@ EMBEDDING_PRICES_PER_1M_TOKENS: dict[str, float] = {
 KNOWN_DIMENSIONS: dict[str, int] = {
     "text-embedding-3-small": 1536,
     "text-embedding-3-large": 3072,
+    # Local models served by Ollama.
+    "qwen3-embedding:0.6b": 1024,
+    "nomic-embed-text": 768,
+    "bge-m3": 1024,
 }
 
 
@@ -131,10 +135,14 @@ class FakeEmbeddingProvider(EmbeddingProvider):
 # ---------------------------------------------------------------------------
 
 class OpenAIEmbeddingProvider(EmbeddingProvider):
-    """Real embeddings via the OpenAI API.
+    """Real embeddings via the OpenAI API, or any server that speaks it.
 
     Handles the three things that break naive implementations at scale:
     batching, per-input token limits, and rate limits.
+
+    With `base_url` set it talks to an OpenAI-compatible server instead, which
+    is how the "ollama" provider runs local models for free. No second client
+    to write or test: the wire format is identical.
     """
 
     def __init__(
@@ -145,8 +153,9 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         batch_size: int = 128,
         max_input_tokens: int = 8_000,
         max_retries: int = 5,
+        base_url: str | None = None,
     ) -> None:
-        if not api_key.strip():
+        if not api_key.strip() and base_url is None:
             raise EmbeddingError(
                 "OPENAI_API_KEY is empty. Add it to .env, or set "
                 "EMBEDDING_PROVIDER=fake to run offline."
@@ -160,7 +169,9 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         self.max_input_tokens = max_input_tokens
         self.max_retries = max_retries
         # The SDK retries transport errors itself; we handle rate limits below.
-        self._client = OpenAI(api_key=api_key, max_retries=2)
+        self._client = OpenAI(
+            api_key=api_key or "unused", base_url=base_url, max_retries=2
+        )
         self._encoder = _get_encoder(model)
 
     def embed(self, texts: list[str]) -> list[list[float]]:
@@ -177,10 +188,19 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
             raise EmbeddingError(
                 f"Provider returned {len(vectors)} vectors for {len(texts)} inputs"
             )
+        # Caught here rather than at INSERT, where pgvector reports it as an
+        # opaque "expected 1536 dimensions, not 1024" deep inside indexing.
+        if len(vectors[0]) != self.dimension:
+            raise EmbeddingError(
+                f"{self.model} returns {len(vectors[0])}-dimensional vectors but "
+                f"EMBEDDING_DIM={self.dimension}. Set EMBEDDING_DIM="
+                f"{len(vectors[0])} in .env and recreate the schema "
+                "(python scripts/init_db.py --reset)."
+            )
         return vectors
 
     def _embed_batch(self, batch: list[str]) -> list[list[float]]:
-        from openai import APIError, RateLimitError
+        from openai import APIConnectionError, APIError, RateLimitError
 
         for attempt in range(self.max_retries):
             try:
@@ -207,6 +227,17 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
                     ) from exc
                 if attempt == self.max_retries - 1:
                     raise
+                _sleep_backoff(attempt)
+
+            except APIConnectionError as exc:
+                # Usually a local server that is not running, rather than a
+                # network blip, so say where we were trying to connect.
+                if attempt == self.max_retries - 1:
+                    raise EmbeddingError(
+                        f"Could not reach {self._client.base_url}. If this is "
+                        "Ollama, start it (ollama serve) and pull the model "
+                        f"(ollama pull {self.model})."
+                    ) from exc
                 _sleep_backoff(attempt)
 
             except APIError as exc:
@@ -436,9 +467,21 @@ def get_embedding_provider(
         )
         return CachedEmbeddingProvider(provider) if use_cache else provider
 
+    if provider_name == "ollama":
+        provider = OpenAIEmbeddingProvider(
+            api_key="",
+            base_url=settings.ollama_base_url,
+            model=settings.embedding_model,
+            dimension=settings.embedding_dim,
+            batch_size=settings.embedding_batch_size,
+            max_input_tokens=settings.embedding_max_tokens,
+            max_retries=settings.embedding_max_retries,
+        )
+        return CachedEmbeddingProvider(provider) if use_cache else provider
+
     raise EmbeddingError(
         f"Unknown embedding provider {settings.embedding_provider!r}. "
-        "Supported: 'openai', 'fake'."
+        "Supported: 'openai', 'ollama', 'fake'."
     )
 
 

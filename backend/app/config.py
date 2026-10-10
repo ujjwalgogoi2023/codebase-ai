@@ -34,19 +34,25 @@ class Settings(BaseSettings):
     # --- Provider credentials ---
     openai_api_key: str = ""
 
+    # Ollama serves an OpenAI-compatible API, so the "ollama" provider reuses
+    # the OpenAI client pointed here. Local, free, and needs no key.
+    ollama_base_url: str = "http://localhost:11434/v1"
+
     # --- Database ---
     database_url: str = (
         "postgresql+psycopg://codebaseai:codebaseai@localhost:5433/codebaseai"
     )
 
     # --- Embeddings ---
-    # "openai" for real vectors, "fake" for deterministic offline vectors.
+    # "openai" or "ollama" for real vectors, "fake" for deterministic offline
+    # vectors.
     embedding_provider: str = "openai"
     embedding_model: str = "text-embedding-3-small"
     embedding_dim: int = 1536
 
     # --- Generation ---
-    # "openai" for real answers, "fake" for scripted offline responses.
+    # "openai" or "ollama" for real answers, "fake" for scripted offline
+    # responses.
     llm_provider: str = "openai"
     llm_model: str = "gpt-4o-mini"
 

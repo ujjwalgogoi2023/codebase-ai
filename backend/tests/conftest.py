@@ -9,11 +9,19 @@ from __future__ import annotations
 
 import os
 
-import pytest
-from sqlalchemy import create_engine, text
+# The tests must not depend on whichever model the developer's .env selects.
+# The chunks table's vector width is fixed from EMBEDDING_DIM at import time,
+# and the suite embeds with 1536-d fakes, so pin it before app.models loads.
+# Real environment variables take precedence over .env in pydantic-settings.
+os.environ["EMBEDDING_DIM"] = "1536"
+os.environ["EMBEDDING_PROVIDER"] = "fake"
+os.environ["LLM_PROVIDER"] = "fake"
 
-from app.config import Settings
-from app.db.base import drop_db, get_session_factory, init_db
+import pytest  # noqa: E402
+from sqlalchemy import create_engine, text  # noqa: E402
+
+from app.config import Settings  # noqa: E402
+from app.db.base import drop_db, get_session_factory, init_db  # noqa: E402
 
 
 def _derive_test_url(url: str) -> str:

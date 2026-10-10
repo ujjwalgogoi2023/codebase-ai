@@ -284,6 +284,49 @@ def test_factory_wraps_openai_in_cache(tmp_path, monkeypatch):
     provider.close()
 
 
+def test_factory_builds_ollama_provider_without_a_key(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.embeddings.PROJECT_ROOT", tmp_path)
+    settings = Settings(
+        embedding_provider="ollama",
+        openai_api_key="",
+        embedding_model="qwen3-embedding:0.6b",
+        embedding_dim=1024,
+        ollama_base_url="http://localhost:11434/v1",
+    )
+
+    provider = get_embedding_provider(settings)
+    assert isinstance(provider, CachedEmbeddingProvider)
+    assert isinstance(provider.inner, OpenAIEmbeddingProvider)
+    assert str(provider.inner._client.base_url).startswith("http://localhost:11434/v1")
+    assert provider.dimension == 1024
+    provider.close()
+
+
+def test_openai_provider_rejects_a_dimension_mismatch():
+    # The model returns 3-d vectors but the schema was built for 5.
+    provider = make_openai_provider(FakeOpenAIClient(dimension=3))
+    provider.dimension = 5
+    with pytest.raises(EmbeddingError, match="EMBEDDING_DIM=3"):
+        provider.embed(["x"])
+
+
+def test_openai_provider_explains_an_unreachable_server(monkeypatch):
+    import httpx
+    from openai import APIConnectionError
+
+    monkeypatch.setattr("app.services.embeddings._sleep_backoff", lambda attempt: None)
+
+    def refuse(model, input):  # noqa: A002
+        raise APIConnectionError(request=httpx.Request("POST", "http://localhost:11434"))
+
+    provider = OpenAIEmbeddingProvider(
+        api_key="", base_url="http://localhost:11434/v1", dimension=3, max_retries=2
+    )
+    provider._client.embeddings = SimpleNamespace(create=refuse)
+    with pytest.raises(EmbeddingError, match="ollama serve"):
+        provider.embed(["x"])
+
+
 def test_factory_rejects_unknown_provider():
     settings = Settings(embedding_provider="pinecone-magic")
     with pytest.raises(EmbeddingError, match="Unknown embedding provider"):

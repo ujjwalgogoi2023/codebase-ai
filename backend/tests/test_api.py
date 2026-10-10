@@ -101,7 +101,7 @@ def test_health_reports_database_and_providers(client):
     assert body["database"] == "ok"
     # Surfacing this is the point: "why are answers nonsense" is often "the
     # server is running on fakes".
-    assert body["embedding_provider"] in ("fake", "openai")
+    assert body["embedding_provider"] in ("fake", "openai", "ollama")
 
 
 def test_openapi_schema_is_generated(client):

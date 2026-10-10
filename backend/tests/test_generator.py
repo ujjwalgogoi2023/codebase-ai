@@ -392,5 +392,16 @@ def test_llm_factory_reports_missing_key():
         get_llm_provider(Settings(llm_provider="openai", openai_api_key=""))
 
 
+def test_llm_factory_builds_ollama_without_a_key():
+    from app.services.llm import OpenAILLMProvider
+
+    provider = get_llm_provider(
+        Settings(llm_provider="ollama", openai_api_key="", llm_model="qwen2.5:7b")
+    )
+    assert isinstance(provider, OpenAILLMProvider)
+    assert provider.model == "qwen2.5:7b"
+    assert "11434" in str(provider._client.base_url)
+
+
 def test_llm_factory_builds_fake():
     assert isinstance(get_llm_provider(Settings(llm_provider="fake")), FakeLLMProvider)

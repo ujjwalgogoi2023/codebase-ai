@@ -1,0 +1,10 @@
+# qwen2.5:7b with an 8k context window.
+#
+# Ollama defaults to 4096 tokens and silently drops the START of a longer
+# prompt, which is where the grounding instructions live. The pipeline budgets
+# up to MAX_CONTEXT_TOKENS of retrieved code plus history plus the answer, so
+# 4096 is too small.
+#
+#   ollama create qwen2.5-8k -f ollama/qwen2.5-8k.Modelfile
+FROM qwen2.5:7b
+PARAMETER num_ctx 8192

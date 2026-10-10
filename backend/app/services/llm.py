@@ -151,15 +151,20 @@ class FakeLLMProvider(LLMProvider):
 # ---------------------------------------------------------------------------
 
 class OpenAILLMProvider(LLMProvider):
-    """Chat completions via the OpenAI API."""
+    """Chat completions via the OpenAI API, or any server that speaks it.
+
+    `base_url` points it at an OpenAI-compatible server such as Ollama, which
+    is how the "ollama" provider runs a local model.
+    """
 
     def __init__(
         self,
         api_key: str,
         model: str = "gpt-4o-mini",
         max_retries: int = 4,
+        base_url: str | None = None,
     ) -> None:
-        if not api_key.strip():
+        if not api_key.strip() and base_url is None:
             raise LLMError(
                 "OPENAI_API_KEY is empty. Add it to .env, or set LLM_PROVIDER=fake "
                 "to run offline."
@@ -169,7 +174,9 @@ class OpenAILLMProvider(LLMProvider):
 
         self.model = model
         self.max_retries = max_retries
-        self._client = OpenAI(api_key=api_key, max_retries=2)
+        self._client = OpenAI(
+            api_key=api_key or "unused", base_url=base_url, max_retries=2
+        )
 
     def complete(
         self,
@@ -179,7 +186,7 @@ class OpenAILLMProvider(LLMProvider):
         temperature: float = 0.0,
         max_output_tokens: int = 1000,
     ) -> LLMResponse:
-        from openai import APIError, RateLimitError
+        from openai import APIConnectionError, APIError, RateLimitError
 
         payload = [{"role": "system", "content": system_prompt}, *messages]
 
@@ -217,6 +224,15 @@ class OpenAILLMProvider(LLMProvider):
                     raise
                 _sleep_backoff(attempt)
 
+            except APIConnectionError as exc:
+                if attempt == self.max_retries - 1:
+                    raise LLMError(
+                        f"Could not reach {self._client.base_url}. If this is "
+                        "Ollama, start it (ollama serve) and pull the model "
+                        f"(ollama pull {self.model})."
+                    ) from exc
+                _sleep_backoff(attempt)
+
             except APIError as exc:
                 status = getattr(exc, "status_code", None)
                 if status is not None and status < 500:
@@ -251,6 +267,15 @@ def get_llm_provider(settings: Settings | None = None) -> LLMProvider:
             max_retries=settings.llm_max_retries,
         )
 
+    if name == "ollama":
+        return OpenAILLMProvider(
+            api_key="",
+            base_url=settings.ollama_base_url,
+            model=settings.llm_model,
+            max_retries=settings.llm_max_retries,
+        )
+
     raise LLMError(
-        f"Unknown LLM provider {settings.llm_provider!r}. Supported: 'openai', 'fake'."
+        f"Unknown LLM provider {settings.llm_provider!r}. "
+        "Supported: 'openai', 'ollama', 'fake'."
     )
