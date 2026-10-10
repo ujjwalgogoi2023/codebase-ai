@@ -78,6 +78,12 @@ def init_db(database_url: str | None = None, settings: Settings | None = None) -
 
     Base.metadata.create_all(engine)
 
+    # create_all() never alters an existing table. Columns added after a
+    # database was first created are added here instead, idempotently, so an
+    # upgrade does not require dropping every index.
+    with engine.begin() as connection:
+        connection.execute(text("ALTER TABLE chunks ADD COLUMN IF NOT EXISTS context TEXT"))
+
 
 def drop_db(database_url: str | None = None) -> None:
     """Drop every table. Used by tests and by `scripts/reset_db.py`."""

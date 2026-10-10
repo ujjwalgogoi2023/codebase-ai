@@ -51,6 +51,7 @@ confidently describing code it last saw three questions ago.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
@@ -96,6 +97,18 @@ Prefer explaining the real control flow over restating the code line by line.
 6. If the context is related but does not directly answer the question, say \
 what the code DOES show and what is missing."""
 
+REWRITE_PROMPT = """\
+You rewrite follow-up questions about a codebase so they can be searched on \
+their own.
+
+Given the conversation so far and the latest question, rewrite the latest \
+question as one standalone question. Replace pronouns and references such as \
+"it", "that", "this function" or "the one above" with what they refer to in \
+the conversation. Keep code identifiers exactly as written. If the question \
+already stands on its own, return it unchanged.
+
+Do not answer the question. Output only the rewritten question, on one line."""
+
 NO_CONTEXT_ANSWER = (
     "I couldn't find anything relevant to that question in this repository. "
     "The search returned no matching code, so there is nothing for me to base "
@@ -112,6 +125,11 @@ class GeneratedAnswer:
     answer: str
     sources: list[RetrievedChunk] = field(default_factory=list)
     repository_id: int = 0
+    # The question as reranked and put to the model. Equal to `question` except
+    # for a follow-up rewritten into a standalone form, which is then also what
+    # was searched. (Without a rewrite, a follow-up's search additionally has
+    # the previous question prepended; see _build_search_query.)
+    search_query: str = ""
     model: str = ""
     input_tokens: int = 0
     output_tokens: int = 0
@@ -175,15 +193,51 @@ def format_context(chunks: list[RetrievedChunk]) -> str:
     The header carries path, line range, symbol and language. Those are not
     decoration: "which file is this?" is frequently the actual question, and
     the model can only answer it if the path is in the text it reads.
+
+    A chunk's referenced module-level definitions follow it, labelled as part
+    of the same source, so "locked after MAX_FAILED_ATTEMPTS" can become
+    "locked after 5 attempts" and still cite [n].
     """
     blocks: list[str] = []
     for index, chunk in enumerate(chunks, start=1):
         descriptor = f"{chunk.kind} {chunk.symbol}" if chunk.symbol else chunk.kind
-        blocks.append(
+        block = (
             f"[{index}] {chunk.citation}  ({descriptor}, {chunk.language})\n"
             f"```{chunk.language}\n{chunk.content}\n```"
         )
+        if chunk.context:
+            block += (
+                "\nDefinitions it uses from the same file:\n"
+                f"```{chunk.language}\n{chunk.context}\n```"
+            )
+        blocks.append(block)
     return "\n\n".join(blocks)
+
+
+_REWRITE_LABEL = re.compile(
+    r"^(?:standalone|rewritten)?\s*(?:question|query)\s*:\s*", re.IGNORECASE
+)
+_CITATION_MARKER = re.compile(r"\[\d+\]")
+
+
+def _clip(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[:limit].rstrip() + "..."
+
+
+def _clean_rewrite(text: str) -> str | None:
+    """The first line of a rewrite, unwrapped, or None if it is not usable.
+
+    Small models decorate: a "Standalone question:" label, surrounding quotes.
+    Citation markers mean the model answered instead of rewriting, and a very
+    long line is an explanation rather than a question; both fall back.
+    """
+    lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
+    if not lines:
+        return None
+    rewrite = _REWRITE_LABEL.sub("", lines[0]).strip().strip("\"'`").strip()
+    if not rewrite or len(rewrite) > 300 or _CITATION_MARKER.search(rewrite):
+        return None
+    return rewrite
 
 
 def build_user_message(question: str, chunks: list[RetrievedChunk]) -> str:
@@ -228,8 +282,15 @@ class Generator:
     ) -> GeneratedAnswer:
         history = history or []
 
+        # A follow-up is resolved ONCE, then that one standalone question is
+        # what gets searched, reranked and answered. Resolving it only for the
+        # search was not enough: the reranker and the answering model would
+        # each still have to guess what "that" meant, and could guess wrong.
+        standalone = self._standalone_question(question, history)
+        focus = standalone or question
+
         search = self.retriever.search(
-            self._build_search_query(question, history),
+            standalone or self._build_search_query(question, history),
             repository_id,
             top_k=top_k,
             filters=filters,
@@ -242,6 +303,7 @@ class Generator:
                 answer=NO_CONTEXT_ANSWER,
                 raw_answer=NO_CONTEXT_ANSWER,
                 repository_id=repository_id,
+                search_query=focus,
                 model=self.llm.model,
                 no_context=True,
             )
@@ -249,14 +311,14 @@ class Generator:
         # Retrieve wide (top_k), then spend a more accurate scorer on the
         # shortlist to pick what the LLM actually reads (rerank_top_k).
         rerank = self.reranker.rerank(
-            question, search.chunks, rerank_top_k or self.settings.rerank_top_k
+            focus, search.chunks, rerank_top_k or self.settings.rerank_top_k
         )
 
-        kept, omitted = self._fit_to_budget(rerank.chunks, question)
+        kept, omitted = self._fit_to_budget(rerank.chunks, focus)
 
         messages = [
             *self._recent_history(history),
-            {"role": "user", "content": build_user_message(question, kept)},
+            {"role": "user", "content": build_user_message(focus, kept)},
         ]
 
         response: LLMResponse = self.llm.complete(
@@ -281,6 +343,7 @@ class Generator:
             citation_coverage=cited.citation_coverage,
             sources=kept,
             repository_id=repository_id,
+            search_query=focus,
             model=response.model,
             input_tokens=response.input_tokens,
             output_tokens=response.output_tokens,
@@ -299,10 +362,12 @@ class Generator:
         the entire subject, and it is not in the sentence. Prepending the most
         recent user turn restores enough context to search with.
 
-        A production system would ask the LLM to rewrite the follow-up into a
-        standalone question, which handles pronouns far better. That costs an
-        extra call per turn, so this cheap heuristic is the deliberate starting
-        point — and it is measurable later against the evaluation set.
+        This is the fallback. By default `_standalone_question` asks the LLM to
+        rewrite the follow-up instead (QUERY_REWRITER=llm), because this
+        heuristic cannot tell which subject a pronoun points at: after a turn
+        about late fees, "which constant controls that?" retrieved the fee
+        code correctly and the model still answered about the lockout constant
+        sitting in the third source.
         """
         if not history:
             return question
@@ -311,6 +376,40 @@ class Generator:
         if not previous:
             return question
         return f"{previous[-1]}\n{question}"
+
+    def _standalone_question(
+        self, question: str, history: list[dict[str, str]]
+    ) -> str | None:
+        """Rewrite a follow-up as a standalone question, or None to fall back.
+
+        Fails soft, like the reranker: an LLM error or an unusable rewrite
+        means the follow-up is handled the old way, never that it fails.
+        """
+        if self.settings.query_rewriter.strip().lower() != "llm":
+            return None
+        turns = self._recent_history(history)
+        if not turns:
+            return None
+
+        transcript = "\n".join(
+            f"{m['role'].capitalize()}: {_clip(m['content'], 600)}" for m in turns
+        )
+        try:
+            response = self.llm.complete(
+                REWRITE_PROMPT,
+                [{
+                    "role": "user",
+                    "content": f"Conversation so far:\n{transcript}\n\n"
+                               f"Latest question: {question}",
+                }],
+                temperature=0.0,
+                max_output_tokens=120,
+            )
+        except Exception:
+            return None
+        if response.truncated:
+            return None
+        return _clean_rewrite(response.text)
 
     def _recent_history(self, history: list[dict[str, str]]) -> list[dict[str, str]]:
         limit = max(0, self.settings.max_history_turns)

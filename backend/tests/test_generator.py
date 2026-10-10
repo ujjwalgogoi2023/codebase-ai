@@ -23,8 +23,10 @@ from app.config import Settings
 from app.services.embeddings import FakeEmbeddingProvider
 from app.services.generator import (
     NO_CONTEXT_ANSWER,
+    REWRITE_PROMPT,
     SYSTEM_PROMPT,
     Generator,
+    _clean_rewrite,
     answer_question,
     build_user_message,
     format_context,
@@ -405,3 +407,155 @@ def test_llm_factory_builds_ollama_without_a_key():
 
 def test_llm_factory_builds_fake():
     assert isinstance(get_llm_provider(Settings(llm_provider="fake")), FakeLLMProvider)
+
+
+# ---------------------------------------------------------------------------
+# Referenced definitions reach the model
+# ---------------------------------------------------------------------------
+
+def test_context_block_includes_referenced_definitions():
+    text = format_context([chunk(1, context="MAX_FAILED_ATTEMPTS = 5")])
+
+    assert "Definitions it uses from the same file" in text
+    assert "MAX_FAILED_ATTEMPTS = 5" in text
+
+
+def test_chunk_without_definitions_renders_as_before():
+    assert "Definitions it uses" not in format_context([chunk(1)])
+
+
+def test_definitions_survive_indexing_and_retrieval(db, tmp_path):
+    """Chunker -> chunks.context -> retriever -> prompt, through the database."""
+    (tmp_path / "auth.py").write_text(
+        "MAX_FAILED_ATTEMPTS = 5\n\n\n"
+        "def login(failed):\n"
+        '    """Lock the account after too many failures."""\n'
+        "    if failed >= MAX_FAILED_ATTEMPTS:\n"
+        "        return 'locked'\n"
+        "    return 'ok'\n",
+        encoding="utf-8",
+    )
+    repo = index_repository(db, name="ctx", root=tmp_path, provider=embedder())
+    llm = FakeLLMProvider()
+
+    result = make_generator(db, llm, query_rewriter="concat").answer(
+        "when is an account locked?", repo.repository_id
+    )
+
+    login = next(c for c in result.sources if c.symbol == "login")
+    assert login.context == "MAX_FAILED_ATTEMPTS = 5"
+    assert "Definitions it uses from the same file" in llm.last_prompt
+
+
+# ---------------------------------------------------------------------------
+# Follow-up rewriting
+# ---------------------------------------------------------------------------
+
+HISTORY = [
+    {"role": "user", "content": "How much is the late fee per day?"},
+    {"role": "assistant", "content": "It is 37 rupees [1]."},
+]
+
+
+def rewriting_llm(rewrite: str = "Which constant controls the late fee per day?"):
+    """Answers rewrite calls with `rewrite`, everything else with an answer."""
+    def respond(system, messages):
+        return rewrite if system == REWRITE_PROMPT else "An answer [1]."
+    return FakeLLMProvider(response=respond)
+
+
+def rewrite_calls(llm: FakeLLMProvider) -> list[dict]:
+    return [c for c in llm.calls if c["system"] == REWRITE_PROMPT]
+
+
+def test_followup_is_rewritten_and_the_rewrite_is_what_gets_answered(db, indexed):
+    llm = rewriting_llm()
+
+    result = make_generator(db, llm).answer(
+        "Which constant controls that?", indexed.repository_id, history=HISTORY
+    )
+
+    assert result.search_query == "Which constant controls the late fee per day?"
+    assert result.question == "Which constant controls that?"
+    final = llm.calls[-1]["messages"][-1]["content"]
+    assert final.endswith("Question: Which constant controls the late fee per day?")
+
+
+def test_rewriter_sees_the_conversation(db, indexed):
+    llm = rewriting_llm()
+    make_generator(db, llm).answer(
+        "Which constant controls that?", indexed.repository_id, history=HISTORY
+    )
+
+    [call] = rewrite_calls(llm)
+    sent = call["messages"][0]["content"]
+    assert "How much is the late fee per day?" in sent
+    assert "Latest question: Which constant controls that?" in sent
+
+
+def test_history_is_still_replayed_after_a_rewrite(db, indexed):
+    llm = rewriting_llm()
+    make_generator(db, llm).answer(
+        "Which constant controls that?", indexed.repository_id, history=HISTORY
+    )
+
+    roles = [m["role"] for m in llm.calls[-1]["messages"]]
+    assert roles == ["user", "assistant", "user"]
+
+
+def test_first_question_costs_no_rewrite_call(db, indexed):
+    llm = rewriting_llm()
+    result = make_generator(db, llm).answer("where is auth?", indexed.repository_id)
+
+    assert rewrite_calls(llm) == []
+    assert result.search_query == "where is auth?"
+
+
+def test_concat_rewriter_makes_no_extra_call(db, indexed):
+    llm = rewriting_llm()
+    result = make_generator(db, llm, query_rewriter="concat").answer(
+        "Which constant controls that?", indexed.repository_id, history=HISTORY
+    )
+
+    assert rewrite_calls(llm) == []
+    assert result.search_query == "Which constant controls that?"
+
+
+@pytest.mark.parametrize("bad_rewrite", ["", "   ", "It is 37 rupees [1].", "x" * 400])
+def test_unusable_rewrite_falls_back_to_the_original_question(db, indexed, bad_rewrite):
+    llm = rewriting_llm(bad_rewrite)
+    result = make_generator(db, llm).answer(
+        "Which constant controls that?", indexed.repository_id, history=HISTORY
+    )
+
+    assert result.search_query == "Which constant controls that?"
+    assert result.sources, "a failed rewrite must not stop the question being answered"
+
+
+def test_rewrite_error_falls_back_instead_of_failing(db, indexed):
+    def respond(system, messages):
+        if system == REWRITE_PROMPT:
+            raise LLMError("model unavailable")
+        return "An answer [1]."
+
+    result = make_generator(db, FakeLLMProvider(response=respond)).answer(
+        "Which constant controls that?", indexed.repository_id, history=HISTORY
+    )
+
+    assert result.search_query == "Which constant controls that?"
+    assert result.answer
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("Which constant controls the fee?", "Which constant controls the fee?"),
+        ('"Which constant controls the fee?"', "Which constant controls the fee?"),
+        ("Standalone question: Where is X?", "Where is X?"),
+        ("Rewritten question: Where is X?\nBecause it refers to X.", "Where is X?"),
+        ("", None),
+        ("The fee is 37 [1].", None),
+    ],
+)
+def test_clean_rewrite(raw, expected):
+    assert _clean_rewrite(raw) == expected

@@ -73,6 +73,12 @@ class Settings(BaseSettings):
     # validate the token?" to make sense; not so many that old turns dominate.
     max_history_turns: int = 6
 
+    # How a follow-up ("which constant controls that?") becomes searchable.
+    # "llm" has the model rewrite it as a standalone question, one extra call
+    # per follow-up. "concat" prepends the previous question: free, but blind
+    # to WHICH earlier subject a pronoun points at. Kept as the control group.
+    query_rewriter: str = "llm"
+
     # --- Retrieval ---
     top_k: int = 10          # candidates pulled from the vector index
     rerank_top_k: int = 3    # survivors actually shown to the LLM

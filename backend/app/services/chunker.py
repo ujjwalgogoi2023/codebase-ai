@@ -52,6 +52,11 @@ DEFAULT_MAX_CHUNK_LINES = 120
 DEFAULT_MIN_CHUNK_LINES = 5
 DEFAULT_OVERLAP_LINES = 10
 
+# Referenced-definition context. A definition longer than this is a table or a
+# big literal, not a setting worth repeating next to every chunk that uses it.
+MAX_DEFINITION_LINES = 6
+MAX_ATTACHED_DEFINITIONS = 8
+
 
 @dataclass(frozen=True)
 class CodeChunk:
@@ -69,6 +74,11 @@ class CodeChunk:
     end_line: int
     symbol: str | None
     kind: str  # function | class | method | module | section | window
+    # Module-level definitions this chunk refers to but does not contain, e.g.
+    # `MAX_FAILED_ATTEMPTS = 5` for a login function that checks it. Shown to
+    # the LLM next to the chunk; deliberately NOT part of content (it would
+    # break the line range a citation points at) or of embedding_text.
+    context: str | None = None
 
     @property
     def num_lines(self) -> int:
@@ -526,6 +536,73 @@ def _naive_spans(total_lines: int, max_lines: int, overlap: int) -> list[_Span]:
 
 
 # ---------------------------------------------------------------------------
+# Referenced definitions (Python)
+# ---------------------------------------------------------------------------
+# Code-aware chunking separates a function from the constants it reads: the
+# login function is one chunk, `MAX_FAILED_ATTEMPTS = 5` is part of a module
+# chunk near the top of the file. Retrieval finds the function, the LLM sees
+# `if failed >= MAX_FAILED_ATTEMPTS`, and the actual number never reaches it.
+# Measured on a real repository, that was the most common reason an answer
+# found the right code but left out the value the question asked for.
+
+def _python_module_definitions(source: str) -> dict[str, tuple[int, int]]:
+    """Map each short module-level assignment or helper function to its lines.
+
+    Tiny helpers count too: `_new_otp()` is two lines whose body IS the answer
+    to "how is the code generated?", and it lives in a different chunk from the
+    function that calls it.
+    """
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return {}
+
+    definitions: dict[str, tuple[int, int]] = {}
+    for node in tree.body:
+        start = node.lineno
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            names = [node.name]
+            if node.decorator_list:
+                start = min(d.lineno for d in node.decorator_list)
+        elif isinstance(node, ast.Assign):
+            names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        elif isinstance(node, ast.AnnAssign) and node.value is not None and isinstance(
+            node.target, ast.Name
+        ):
+            names = [node.target.id]
+        else:
+            continue
+
+        end = node.end_lineno or node.lineno
+        if end - start + 1 > MAX_DEFINITION_LINES:
+            continue
+        for name in names:
+            if not name.startswith("__"):  # __all__, __version__: not settings
+                definitions[name] = (start, end)
+    return definitions
+
+
+def _referenced_definitions(
+    span: _Span,
+    content: str,
+    lines: list[str],
+    definitions: dict[str, tuple[int, int]],
+) -> str | None:
+    """Source of the module-level definitions `content` uses but lacks."""
+    wanted: set[tuple[int, int]] = set()
+    for name, (start, end) in definitions.items():
+        if span.start <= start and end <= span.end:
+            continue  # the chunk already contains this definition
+        if re.search(rf"\b{re.escape(name)}\b", content):
+            wanted.add((start, end))
+
+    if not wanted:
+        return None
+    picked = sorted(wanted)[:MAX_ATTACHED_DEFINITIONS]
+    return "\n".join("\n".join(lines[start - 1 : end]) for start, end in picked)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -581,6 +658,12 @@ def chunk_file(
     for span in spans:
         final.extend(_split_oversized(span, max_chunk_lines, overlap_lines))
 
+    definitions = (
+        _python_module_definitions(source_file.content)
+        if strategy == "code_aware" and source_file.language == "python"
+        else {}
+    )
+
     chunks: list[CodeChunk] = []
     for span in final:
         content = "\n".join(lines[span.start - 1 : span.end])
@@ -595,6 +678,9 @@ def chunk_file(
                 end_line=span.end,
                 symbol=span.symbol,
                 kind=span.kind,
+                context=_referenced_definitions(span, content, lines, definitions)
+                if definitions
+                else None,
             )
         )
     return chunks

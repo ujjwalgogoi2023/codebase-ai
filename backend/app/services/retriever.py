@@ -74,6 +74,7 @@ class RetrievedChunk:
     end_line: int
     content: str
     distance: float
+    context: str | None = None
 
     @property
     def score(self) -> float:
@@ -207,6 +208,7 @@ class Retriever:
                 end_line=row.end_line,
                 content=row.content,
                 distance=float(row.distance),
+                context=row.context,
             )
             for row in rows
         ]
@@ -285,6 +287,7 @@ class Retriever:
             Chunk.start_line,
             Chunk.end_line,
             Chunk.content,
+            Chunk.context,
             distance,
         ).where(Chunk.repository_id == repository_id)
 

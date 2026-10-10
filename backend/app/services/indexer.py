@@ -299,6 +299,7 @@ def _persist(
                 "file_id": file_id,
                 "repository_id": repository.id,
                 "content": chunk.content,
+                "context": chunk.context,
                 "start_line": chunk.start_line,
                 "end_line": chunk.end_line,
                 "symbol": chunk.symbol,

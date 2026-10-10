@@ -147,6 +147,10 @@ class Chunk(Base):
     )
 
     content: Mapped[str] = mapped_column(Text)
+    # Module-level definitions the chunk references (see chunker). Shown to the
+    # LLM beside the chunk, never embedded or cited. NULL for chunks indexed
+    # before this existed, and for languages it is not computed for.
+    context: Mapped[str | None] = mapped_column(Text, nullable=True)
     start_line: Mapped[int] = mapped_column(Integer)
     end_line: Mapped[int] = mapped_column(Integer)
     symbol: Mapped[str | None] = mapped_column(String(512), nullable=True)

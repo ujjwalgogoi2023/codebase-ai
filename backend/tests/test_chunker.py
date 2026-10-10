@@ -540,3 +540,115 @@ def test_typescript_file_opening_with_an_iife_chunks_cleanly():
     lines = sf.content.splitlines()
     missing = [i + 1 for i, l in enumerate(lines) if l.strip() and (i + 1) not in covered]
     assert not missing, f"lines dropped: {missing}"
+
+
+# ---------------------------------------------------------------------------
+# Referenced module-level definitions
+# ---------------------------------------------------------------------------
+
+LOCKOUT_MODULE = '''
+    """Login rules."""
+
+    MAX_FAILED_ATTEMPTS = 5
+    LOCKOUT_MINUTES = 15
+    UNUSED_SETTING = "never referenced"
+
+
+    def _new_code() -> str:
+        return "123456"
+
+
+    def login(failed: int) -> bool:
+        """Lock the account after too many failures."""
+        if failed >= MAX_FAILED_ATTEMPTS:
+            return lock_for(LOCKOUT_MINUTES)
+        return issue(_new_code())
+'''
+
+
+def test_function_carries_the_constants_it_reads():
+    login = by_symbol(chunk_file(make_file(LOCKOUT_MODULE)))["login"]
+
+    assert "MAX_FAILED_ATTEMPTS = 5" in login.context
+    assert "LOCKOUT_MINUTES = 15" in login.context
+
+
+def test_function_carries_small_helpers_it_calls():
+    login = by_symbol(chunk_file(make_file(LOCKOUT_MODULE)))["login"]
+
+    assert 'return "123456"' in login.context
+
+
+def test_unreferenced_definitions_are_not_attached():
+    login = by_symbol(chunk_file(make_file(LOCKOUT_MODULE)))["login"]
+
+    assert "UNUSED_SETTING" not in login.context
+
+
+def test_context_leaves_content_citation_and_embedding_alone():
+    """Context is for the LLM only: line ranges and vectors must not move."""
+    login = by_symbol(chunk_file(make_file(LOCKOUT_MODULE)))["login"]
+
+    assert "MAX_FAILED_ATTEMPTS = 5" not in login.content
+    assert login.content.startswith("def login")
+    assert login.context not in login.embedding_text
+
+
+def test_definitions_already_in_the_chunk_are_not_repeated():
+    source = '''
+        LIMIT = 3
+
+        def f():
+            return LIMIT
+    '''
+    # Small enough that the constant and the function share one chunk.
+    [both] = [c for c in chunk_file(make_file(source)) if "LIMIT = 3" in c.content]
+    assert "return LIMIT" in both.content
+    assert both.context is None
+
+
+def test_long_definitions_are_not_attached():
+    source = '''
+        TABLE = {
+            "a": 1,
+            "b": 2,
+            "c": 3,
+            "d": 4,
+            "e": 5,
+            "f": 6,
+        }
+
+
+        def lookup(key):
+            """Find a key in the table, which is far too long to repeat."""
+            value = TABLE.get(key)
+            if value is None:
+                raise KeyError(key)
+            return value
+    '''
+    lookup = by_symbol(chunk_file(make_file(source)))["lookup"]
+    assert lookup.context is None
+
+
+def test_naive_strategy_and_other_languages_get_no_context():
+    naive = chunk_file(make_file(LOCKOUT_MODULE), strategy="naive")
+    assert all(c.context is None for c in naive)
+
+    js = make_file(
+        """
+        const LIMIT = 3;
+        export function check(n) {
+          return n > LIMIT;
+        }
+        """,
+        path="a.js",
+        language="javascript",
+    )
+    assert all(c.context is None for c in chunk_file(js))
+
+
+def test_unparseable_python_gets_no_context_and_loses_no_lines():
+    broken = make_file("X = 1\ndef broken(:\n    return X\n")
+    chunks = chunk_file(broken)
+    assert all(c.context is None for c in chunks)
+    assert sum(c.num_lines for c in chunks) >= broken.num_lines
