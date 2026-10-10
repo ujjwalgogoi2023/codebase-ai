@@ -1,0 +1,197 @@
+{
+  "question_set": "answers_codebaseai.json",
+  "repository_id": 1,
+  "summary": {
+    "answerable": 10,
+    "retrieved": 6,
+    "cited": 6,
+    "correct": 5,
+    "wrongly_refused": 1,
+    "unanswerable": 5,
+    "refused": 5,
+    "invalid_markers": 0
+  },
+  "answerable": [
+    {
+      "question": "How many candidate chunks are pulled from the vector index, and how many of them reach the language model?",
+      "retrieved": false,
+      "cited": false,
+      "correct": true,
+      "missing_facts": [],
+      "invalid_markers": [],
+      "seconds": 14.1,
+      "answer": "From the provided code context, the vector index returns `TOP_K` candidate chunks, which is set to 10 by default [2][3]. However, only `RERANK_TOP_K` chunks, set to 3 by default, actually reach the language model [2][3].",
+      "wrongly_refused": false
+    },
+    {
+      "question": "How long can cloning a repository take before it is stopped?",
+      "retrieved": true,
+      "cited": true,
+      "correct": true,
+      "missing_facts": [],
+      "invalid_markers": [],
+      "seconds": 12.5,
+      "answer": "Cloning a repository can take up to 300 seconds before it is stopped if it has not completed [2][1]. This timeout is defined by the `CLONE_TIMEOUT_SECONDS` constant, which is set to 300 seconds in the provided code [1][2]. If the cloning process has not finished within this time, a `subprocess.TimeoutExpired` exception is raised [1][2].",
+      "wrongly_refused": false
+    },
+    {
+      "question": "Which hosts are repositories allowed to be cloned from?",
+      "retrieved": true,
+      "cited": true,
+      "correct": true,
+      "missing_facts": [],
+      "invalid_markers": [],
+      "seconds": 10.3,
+      "answer": "Repositories are allowed to be cloned from the hosts specified in the `ALLOWED_GIT_HOSTS` set, which includes the following values:\n\n- github.com\n- www.github.com\n- gitlab.com\n- www.gitlab.com\n- bitbucket.org [1]",
+      "wrongly_refused": false
+    },
+    {
+      "question": "How large can an uploaded ZIP archive be once it is uncompressed?",
+      "retrieved": false,
+      "cited": false,
+      "correct": false,
+      "missing_facts": [
+        [
+          "500"
+        ]
+      ],
+      "invalid_markers": [],
+      "seconds": 12.2,
+      "answer": "The provided tests do not specify the maximum size an uploaded ZIP archive can be once it is uncompressed. The test [1] [test_zip_bomb_is_rejected_before_extraction] checks that the size is checked from the header before extraction, but does not set a limit on the uncompressed size. Similarly, [3] [test_upload_rejects_a_zip_slip_archive] tests for a specific zip slip condition but does not mention size limits. Therefore, based on the given context, I cannot determine the maximum uncompressed size of an uploaded ZIP archive.",
+      "wrongly_refused": false
+    },
+    {
+      "question": "How does the embedding provider tell a permanent out-of-credits error apart from a temporary rate limit?",
+      "retrieved": true,
+      "cited": true,
+      "correct": true,
+      "missing_facts": [],
+      "invalid_markers": [],
+      "seconds": 17.5,
+      "answer": "The embedding provider distinguishes between a permanent out-of-credits error and a temporary rate limit by checking the error message, type, and code. Specifically, the function `_is_quota_error` [1] examines the exception's attributes:\n\n1. It first checks if the exception's `code` attribute contains any of the strings defined in the `_QUOTA_MARKERS` tuple [2].\n2. If not, it inspects the exception's `body` attribute, which is expected to be a dictionary. It looks for a `error` key, and if present, checks the `code` and `type` fields for any of the strings in `_QUOTA_MARKERS`.\n3. Finally, it searches the exception's string representation for any of the strings in `_QUOTA_MARKERS`.\n\nThe test `_quota_error` [3] demonstrates how a `RateLimitError` with a specific body is constructed to simulate an out-of-credits error, which includes the `code` and `type` fields that would trigger the `_is_quota_error` function to return `True`.",
+      "wrongly_refused": false
+    },
+    {
+      "question": "How many lines of each candidate does the reranker look at?",
+      "retrieved": true,
+      "cited": true,
+      "correct": true,
+      "missing_facts": [],
+      "invalid_markers": [],
+      "seconds": 13.1,
+      "answer": "The reranker looks at the first `preview_lines` number of lines for each candidate. By default, this is set to 18 lines [1][2][3]. This value is configurable through the `preview_lines` parameter in the `LLMReranker` constructor [1]. The actual number of lines previewed can be adjusted when creating an instance of `LLMReranker` [2][3].",
+      "wrongly_refused": false
+    },
+    {
+      "question": "How many earlier turns of a conversation are replayed to the model?",
+      "retrieved": false,
+      "cited": false,
+      "correct": false,
+      "missing_facts": [
+        [
+          "6",
+          "six"
+        ]
+      ],
+      "invalid_markers": [],
+      "seconds": 17.1,
+      "answer": "The code shows that the number of earlier turns replayed to the model can vary depending on the test:\n\n1. In `test_history_is_replayed_to_the_model` [1], the entire history is replayed to the model. This is indicated by the `assert roles == [\"user\", \"assistant\", \"user\"]` and the presence of the initial user message \"where is authentication implemented?\" in the last prompt.\n\n2. In `test_history_is_capped` [2], only the most recent 4 turns plus the current question are replayed. This is confirmed by the assertion `assert len(llm.calls[-1][\"messages\"]) == 5` and the absence of the earliest turn \"turn 0\" in the last prompt.\n\nTherefore, the number of earlier turns replayed to the model can be either the full history or capped at 4 turns, depending on the test scenario.",
+      "wrongly_refused": false
+    },
+    {
+      "question": "Which kinds of source files get indexed?",
+      "retrieved": true,
+      "cited": true,
+      "correct": false,
+      "missing_facts": [
+        [
+          "python",
+          ".py"
+        ],
+        [
+          "typescript",
+          ".ts"
+        ],
+        [
+          "java"
+        ]
+      ],
+      "invalid_markers": [],
+      "seconds": 16.6,
+      "answer": "Source files get indexed if they meet the following criteria:\n\n1. They are not in ignored directories. Directories are ignored if they start with a dot [1][2][3] or if they are in the `IGNORED_DIRS` list.\n2. They are not in the list of explicitly ignored filenames [1][2][3].\n3. They have a supported language, which is determined by the `detect_language` function based on the file extension [1][2].\n4. They are not binary files, as indicated by their size [1].\n5. They are not empty [1].\n\nFiles that do not meet these criteria are skipped. The `parse_repository` function returns a list of `SourceFile` objects that have passed these checks [1][3].",
+      "wrongly_refused": false
+    },
+    {
+      "question": "What is the largest file size that will be indexed?",
+      "retrieved": false,
+      "cited": false,
+      "correct": false,
+      "missing_facts": [
+        [
+          "1,000,000",
+          "1000000",
+          "1_000_000",
+          "1 mb"
+        ]
+      ],
+      "invalid_markers": [],
+      "seconds": 15.6,
+      "answer": "The code does not explicitly define a maximum file size for indexing. The function `test_respects_max_file_bytes` in [3] tests behavior when `max_file_bytes` is set to 100, but this is used to check if files larger than this threshold are skipped. There is no indication of what the default or maximum allowed file size is for indexing.\n\nThe `index_repository` function accepts a `max_chunk_lines` parameter, but this controls how large chunks are created from files, not the maximum file size. [1] mentions `max_chunk_lines` as an optional parameter with a default value of `None`.\n\nTherefore, based on the provided code, I don't know the largest file size that will be indexed. [1][3]",
+      "wrongly_refused": true
+    },
+    {
+      "question": "What happens if rewriting a follow-up question fails?",
+      "retrieved": true,
+      "cited": true,
+      "correct": false,
+      "missing_facts": [
+        [
+          "fall back",
+          "falls back",
+          "previous question"
+        ]
+      ],
+      "invalid_markers": [],
+      "seconds": 13.7,
+      "answer": "If rewriting a follow-up question fails, the function `_standalone_question` will return `None`. This causes the follow-up to be handled the old way, rather than failing completely [1]. The method checks if the query rewriter is set to \"llm\", collects recent history, and attempts to rewrite the question using an LLM. If any step fails\u2014due to an LLM error or an unusable rewrite\u2014it returns `None` [1].",
+      "wrongly_refused": false
+    }
+  ],
+  "unanswerable": [
+    {
+      "question": "How does the app send email notifications?",
+      "refused": true,
+      "invalid_markers": [],
+      "seconds": 9.3,
+      "answer": "The retrieved code does not show any implementation related to sending email notifications. There are references to fake providers for embeddings and language models, but no code for sending emails is present. [2][3]"
+    },
+    {
+      "question": "Where is the GraphQL schema defined?",
+      "refused": true,
+      "invalid_markers": [],
+      "seconds": 7.7,
+      "answer": "The retrieved code does not contain any definition of a GraphQL schema. The provided code defines Pydantic models for `UsageOut`, `HealthOut`, and `ChatResponse`, but there is no indication of a GraphQL schema definition. [1][2][3]"
+    },
+    {
+      "question": "How are the Kubernetes deployments configured?",
+      "refused": true,
+      "invalid_markers": [],
+      "seconds": 12.7,
+      "answer": "The retrieved code does not contain any information about Kubernetes deployments or their configuration. The code focuses on settings for a Python application, including database URLs, API keys, and model configurations, but does not mention Kubernetes or deployment details."
+    },
+    {
+      "question": "How do users sign up for an account?",
+      "refused": true,
+      "invalid_markers": [],
+      "seconds": 10.8,
+      "answer": "The provided code does not contain any information about user sign-up processes. The `build_user_message` function is used to construct a message for users based on chunks of code and a question, and the test files focus on registration and indexing as well as search endpoints. There is no code related to user sign-up in the given context."
+    },
+    {
+      "question": "How are live updates pushed to the browser over WebSockets?",
+      "refused": true,
+      "invalid_markers": [],
+      "seconds": 8.5,
+      "answer": "The retrieved code does not contain any information about live updates pushed to the browser over WebSockets. The provided files are related to embeddings and source validation tests, but do not mention WebSocket functionality."
+    }
+  ]
+}

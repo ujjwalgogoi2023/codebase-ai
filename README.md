@@ -436,6 +436,43 @@ Elasticsearch, and a class-timetable feature that a migration had removed).
   subject ("...if Redis is unavailable?") already searches well. Rewriting
   matters for the ones that do not.
 
+#### Run these tests yourself
+
+Three scripts in `evaluation/`, all against real models (start the backend
+first for the first two):
+
+```bash
+python evaluation/system_test.py
+```
+
+```bash
+python evaluation/answer_quality.py evaluation/answers_codebaseai.json
+```
+
+```bash
+python evaluation/followup_ab.py evaluation/answers_codebaseai.json
+```
+
+- **`system_test.py`** — 33 black-box checks of the running API: indexing,
+  search, grounded answers, follow-ups, refusals, input validation, ZIP upload
+  including a Zip Slip archive, re-index and delete. It builds a throwaway
+  repository full of facts no model could know (a 37-rupee late fee), so a
+  correct answer proves it came from retrieval. Exits non-zero on any failure.
+- **`answer_quality.py`** — scores `/chat` answers against a question set: was
+  the right file sent and cited, does the answer contain the key facts, and
+  does it refuse features that do not exist. Results are written next to the
+  question set, so a set kept in `data/` (gitignored) stays private.
+- **`followup_ab.py`** — the same follow-up questions under
+  `QUERY_REWRITER=concat` and `llm`, from identical history.
+
+`evaluation/answers_codebaseai.json` asks about this repository's own backend
+(index it as `codebaseai-backend` first). On it the right file reached the
+model for 6 of 10 questions and the key fact appeared in 5; all 5 missing
+features were refused, and the follow-up strategies tied 4/4. The misses are
+the test-file problem again: `test_zip_bomb_is_rejected_before_extraction`
+and its neighbours took the slots meant for the code that defines the values,
+and 64% of this backend's chunks are tests.
+
 ---
 
 ## Design decisions
@@ -504,7 +541,7 @@ backend/
   tests/          330 tests
 frontend/         React + Vite + Tailwind
 evaluation/       datasets (own backend, Flask), harness, experiment runner,
-                  results/
+                  answer-quality and API system tests, results/
 ollama/           Modelfile for the 8k-context local LLM
 scripts/          per-stage CLIs (parse, chunk, index, search, ask)
 docker-compose.yml

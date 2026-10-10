@@ -1,0 +1,85 @@
+{
+  "repository": "codebaseai-backend",
+  "description": "Answer-quality questions about this repository's own backend. Index it first: python scripts/index_repo.py backend --name codebaseai-backend. Paths are relative to backend/ and matched by suffix. Every fact was checked against the source; every 'unanswerable' feature was checked absent.",
+  "answerable": [
+    {
+      "question": "How many candidate chunks are pulled from the vector index, and how many of them reach the language model?",
+      "expected_files": ["app/config.py"],
+      "facts": [["10", "ten"], ["3", "three"]]
+    },
+    {
+      "question": "How long can cloning a repository take before it is stopped?",
+      "expected_files": ["app/services/sources.py"],
+      "facts": [["300", "5 minutes", "five minutes"]]
+    },
+    {
+      "question": "Which hosts are repositories allowed to be cloned from?",
+      "expected_files": ["app/services/sources.py"],
+      "facts": [["github"], ["gitlab"], ["bitbucket"]]
+    },
+    {
+      "question": "How large can an uploaded ZIP archive be once it is uncompressed?",
+      "expected_files": ["app/services/sources.py"],
+      "facts": [["500"]]
+    },
+    {
+      "question": "How does the embedding provider tell a permanent out-of-credits error apart from a temporary rate limit?",
+      "expected_files": ["app/services/embeddings.py"],
+      "facts": [["quota"]]
+    },
+    {
+      "question": "How many lines of each candidate does the reranker look at?",
+      "expected_files": ["app/config.py", "app/services/reranker.py"],
+      "facts": [["18", "eighteen"]]
+    },
+    {
+      "question": "How many earlier turns of a conversation are replayed to the model?",
+      "expected_files": ["app/config.py", "app/services/generator.py"],
+      "facts": [["6", "six"]]
+    },
+    {
+      "question": "Which kinds of source files get indexed?",
+      "expected_files": ["app/services/repository_parser.py"],
+      "facts": [["python", ".py"], ["typescript", ".ts"], ["java"]]
+    },
+    {
+      "question": "What is the largest file size that will be indexed?",
+      "expected_files": ["app/config.py", "app/services/repository_parser.py"],
+      "facts": [["1,000,000", "1000000", "1_000_000", "1 mb"]]
+    },
+    {
+      "question": "What happens if rewriting a follow-up question fails?",
+      "expected_files": ["app/services/generator.py"],
+      "facts": [["fall back", "falls back", "previous question"]]
+    }
+  ],
+  "unanswerable": [
+    "How does the app send email notifications?",
+    "Where is the GraphQL schema defined?",
+    "How are the Kubernetes deployments configured?",
+    "How do users sign up for an account?",
+    "How are live updates pushed to the browser over WebSockets?"
+  ],
+  "followups": [
+    {
+      "first": "How are repositories cloned from GitHub?",
+      "followup": "How long can that take before it is stopped?",
+      "facts": [["300", "5 minutes", "five minutes"]]
+    },
+    {
+      "first": "How does the reranker reorder search candidates?",
+      "followup": "What happens if its output is malformed?",
+      "facts": [["fall back", "falls back", "vector order", "original order"]]
+    },
+    {
+      "first": "How are uploaded ZIP archives checked before extraction?",
+      "followup": "How many files can one contain?",
+      "facts": [["50,000", "50000", "50_000"]]
+    },
+    {
+      "first": "How does the app decide which files are worth indexing?",
+      "followup": "Which folders does it skip?",
+      "facts": [["node_modules"]]
+    }
+  ]
+}
