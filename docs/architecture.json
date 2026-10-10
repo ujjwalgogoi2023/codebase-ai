@@ -8,36 +8,26 @@
     "repository": {
       "url": "https://github.com/ujjwalgogoi2023/codebase-ai",
       "provider": "github",
-      "revision": "aa88ab5d645ae731cff61724c7b75210057952f1"
+      "revision": "6607ffee070e40ab491f4ee442b66f4a8fc416aa"
     },
     "views": [
       {
         "id": "ingestion",
         "label": "Ingestion",
-        "focus": [
-          "api",
-          "indexer",
-          "parser",
-          "chunker",
-          "embeddings",
-          "openai",
-          "pgvector"
-        ],
-        "note": "A repository is cloned or unzipped, chunked by structure, embedded and stored in pgvector."
+        "focus": ["api", "indexer", "parser", "chunker", "embeddings", "models", "pgvector"],
+        "note": "Clone or unzip, chunk by syntax with referenced definitions attached, embed locally, store in pgvector."
       },
       {
         "id": "query",
         "label": "Query path",
-        "focus": [
-          "ui",
-          "api",
-          "retriever",
-          "pgvector",
-          "reranker",
-          "generator",
-          "openai"
-        ],
-        "note": "Retrieve 10 by cosine similarity, rerank to 3, then answer with validated citations."
+        "focus": ["ui", "api", "retriever", "pgvector", "reranker", "generator", "models"],
+        "note": "Rewrite follow-ups, retrieve 10 by cosine, rerank to 3, answer with validated [n] citations."
+      },
+      {
+        "id": "testing",
+        "label": "Testing",
+        "focus": ["evals", "api", "generator", "models"],
+        "note": "System and answer-quality tests drive the real API on real models; unit tests use fakes."
       }
     ]
   },
@@ -47,43 +37,34 @@
       "type": "frontend",
       "label": "React UI",
       "sublabel": "Vite · Tailwind",
-      "pos": [
-        20,
-        300
-      ],
-      "size": [
-        140,
-        64
-      ],
-      "sources": [
-        {
-          "path": "frontend/src/App.jsx"
-        }
-      ]
+      "pos": [20, 300],
+      "size": [140, 64],
+      "sources": [{ "path": "frontend/src/App.jsx" }]
     },
     {
       "id": "api",
       "type": "backend",
       "label": "FastAPI",
       "sublabel": "/repositories · /chat",
-      "pos": [
-        240,
-        300
-      ],
-      "size": [
-        150,
-        64
-      ],
+      "pos": [240, 300],
+      "size": [150, 64],
       "sources": [
-        {
-          "path": "backend/app/main.py"
-        },
-        {
-          "path": "backend/app/api/chat.py"
-        },
-        {
-          "path": "backend/app/api/repositories.py"
-        }
+        { "path": "backend/app/main.py" },
+        { "path": "backend/app/api/chat.py" },
+        { "path": "backend/app/api/repositories.py" }
+      ]
+    },
+    {
+      "id": "evals",
+      "type": "external",
+      "label": "Eval & tests",
+      "sublabel": "evaluation/",
+      "pos": [20, 500],
+      "size": [140, 64],
+      "sources": [
+        { "path": "evaluation/system_test.py" },
+        { "path": "evaluation/answer_quality.py" },
+        { "path": "evaluation/run_experiments.py" }
       ]
     },
     {
@@ -91,159 +72,83 @@
       "type": "backend",
       "label": "Indexer",
       "sublabel": "background task",
-      "pos": [
-        470,
-        100
-      ],
-      "size": [
-        140,
-        64
-      ],
-      "sources": [
-        {
-          "path": "backend/app/services/indexer.py"
-        }
-      ]
+      "pos": [500, 100],
+      "size": [140, 64],
+      "sources": [{ "path": "backend/app/services/indexer.py" }]
     },
     {
       "id": "parser",
       "type": "backend",
       "label": "Repo Parser",
       "sublabel": "clone · unzip · filter",
-      "pos": [
-        690,
-        100
-      ],
-      "size": [
-        150,
-        64
-      ],
+      "pos": [720, 100],
+      "size": [150, 64],
       "tag": "Zip Slip safe",
       "sources": [
-        {
-          "path": "backend/app/services/sources.py"
-        },
-        {
-          "path": "backend/app/services/repository_parser.py"
-        }
+        { "path": "backend/app/services/sources.py" },
+        { "path": "backend/app/services/repository_parser.py" }
       ]
     },
     {
       "id": "chunker",
       "type": "backend",
       "label": "Chunker",
-      "sublabel": "AST / brace-aware",
-      "pos": [
-        910,
-        100
-      ],
-      "size": [
-        140,
-        64
-      ],
-      "sources": [
-        {
-          "path": "backend/app/services/chunker.py"
-        }
-      ]
+      "sublabel": "AST · + definitions",
+      "pos": [950, 100],
+      "size": [140, 64],
+      "sources": [{ "path": "backend/app/services/chunker.py" }]
     },
     {
       "id": "embeddings",
       "type": "backend",
       "label": "Embeddings",
       "sublabel": "cached · batched",
-      "pos": [
-        1130,
-        100
-      ],
-      "size": [
-        140,
-        64
-      ],
-      "sources": [
-        {
-          "path": "backend/app/services/embeddings.py"
-        }
-      ]
+      "pos": [1170, 100],
+      "size": [140, 64],
+      "sources": [{ "path": "backend/app/services/embeddings.py" }]
     },
     {
       "id": "retriever",
       "type": "backend",
       "label": "Retriever",
       "sublabel": "vector search",
-      "pos": [
-        470,
-        300
-      ],
-      "size": [
-        140,
-        64
-      ],
-      "sources": [
-        {
-          "path": "backend/app/services/retriever.py"
-        }
-      ]
+      "pos": [500, 300],
+      "size": [140, 64],
+      "sources": [{ "path": "backend/app/services/retriever.py" }]
     },
     {
       "id": "reranker",
       "type": "backend",
       "label": "Reranker",
       "sublabel": "listwise LLM",
-      "pos": [
-        690,
-        300
-      ],
-      "size": [
-        140,
-        64
-      ],
-      "sources": [
-        {
-          "path": "backend/app/services/reranker.py"
-        }
-      ]
+      "pos": [720, 300],
+      "size": [140, 64],
+      "sources": [{ "path": "backend/app/services/reranker.py" }]
     },
     {
       "id": "generator",
       "type": "backend",
       "label": "Generator",
-      "sublabel": "grounded · [n] cites",
-      "pos": [
-        910,
-        300
-      ],
-      "size": [
-        140,
-        64
-      ],
+      "sublabel": "rewrite · cite [n]",
+      "pos": [950, 300],
+      "size": [140, 64],
       "sources": [
-        {
-          "path": "backend/app/services/generator.py"
-        },
-        {
-          "path": "backend/app/services/citations.py"
-        }
+        { "path": "backend/app/services/generator.py" },
+        { "path": "backend/app/services/citations.py" }
       ]
     },
     {
-      "id": "openai",
+      "id": "models",
       "type": "external",
-      "label": "OpenAI API",
-      "sublabel": "embed · gpt-4o-mini",
-      "pos": [
-        1130,
-        300
-      ],
-      "size": [
-        140,
-        64
-      ],
-      "brand": "openai",
+      "label": "Ollama (local)",
+      "sublabel": "qwen3-embed · qwen2.5",
+      "pos": [1170, 300],
+      "size": [150, 64],
+      "brand": "ollama",
+      "tag": "or OpenAI via .env",
       "sources": [
-        {
-          "path": "backend/app/services/llm.py"
-        }
+        { "path": "backend/app/services/llm.py" },
+        { "path": "ollama/qwen2.5-8k.Modelfile" }
       ]
     },
     {
@@ -251,33 +156,17 @@
       "type": "database",
       "label": "PostgreSQL",
       "sublabel": "pgvector · HNSW",
-      "pos": [
-        470,
-        500
-      ],
-      "size": [
-        140,
-        64
-      ],
+      "pos": [500, 500],
+      "size": [140, 64],
       "tag": "Docker :5433",
       "sources": [
-        {
-          "path": "backend/app/models/__init__.py"
-        },
-        {
-          "path": "docker-compose.yml"
-        }
+        { "path": "backend/app/models/__init__.py" },
+        { "path": "docker-compose.yml" }
       ]
     }
   ],
   "connections": [
-    {
-      "id": "ui-to-api",
-      "from": "ui",
-      "to": "api",
-      "label": "REST · JSON",
-      "variant": "emphasis"
-    },
+    { "id": "ui-to-api", "from": "ui", "to": "api", "label": "REST · JSON", "variant": "emphasis" },
     {
       "id": "schedule-index",
       "from": "api",
@@ -287,28 +176,13 @@
       "fromSide": "top",
       "toSide": "left"
     },
-    {
-      "id": "parse-files",
-      "from": "indexer",
-      "to": "parser",
-      "label": "acquire"
-    },
-    {
-      "id": "chunk-files",
-      "from": "parser",
-      "to": "chunker",
-      "label": "SourceFile"
-    },
-    {
-      "id": "embed-chunks",
-      "from": "chunker",
-      "to": "embeddings",
-      "label": "CodeChunk"
-    },
+    { "id": "parse-files", "from": "indexer", "to": "parser", "label": "acquire" },
+    { "id": "chunk-files", "from": "parser", "to": "chunker", "label": "SourceFile" },
+    { "id": "embed-chunks", "from": "chunker", "to": "embeddings", "label": "CodeChunk" },
     {
       "id": "embed-call",
       "from": "embeddings",
-      "to": "openai",
+      "to": "models",
       "label": "embed",
       "labelDy": 24,
       "fromSide": "bottom",
@@ -318,21 +192,12 @@
       "id": "persist-chunks",
       "from": "embeddings",
       "to": "pgvector",
-      "label": "upsert vectors",
+      "label": "vectors + context",
       "fromSide": "right",
       "toSide": "right",
-      "labelAt": [
-        900,
-        532
-      ]
+      "labelAt": [930, 532]
     },
-    {
-      "id": "ask",
-      "from": "api",
-      "to": "retriever",
-      "label": "question",
-      "variant": "emphasis"
-    },
+    { "id": "ask", "from": "api", "to": "retriever", "label": "standalone q", "variant": "emphasis" },
     {
       "id": "vector-search",
       "from": "retriever",
@@ -342,34 +207,25 @@
       "fromSide": "bottom",
       "toSide": "top"
     },
-    {
-      "id": "rerank",
-      "from": "retriever",
-      "to": "reranker",
-      "label": "10 cands",
-      "variant": "emphasis"
-    },
-    {
-      "id": "generate",
-      "from": "reranker",
-      "to": "generator",
-      "label": "top-3",
-      "variant": "emphasis"
-    },
-    {
-      "id": "complete",
-      "from": "generator",
-      "to": "openai",
-      "label": "prompt",
-      "variant": "emphasis"
-    },
+    { "id": "rerank", "from": "retriever", "to": "reranker", "label": "10 cands", "variant": "emphasis" },
+    { "id": "generate", "from": "reranker", "to": "generator", "label": "top-3", "variant": "emphasis" },
+    { "id": "complete", "from": "generator", "to": "models", "label": "prompt", "variant": "emphasis" },
     {
       "id": "rerank-llm",
       "from": "reranker",
-      "to": "openai",
+      "to": "models",
       "label": "rank",
       "variant": "dashed",
       "fromSide": "bottom",
+      "toSide": "bottom"
+    },
+    {
+      "id": "black-box-tests",
+      "from": "evals",
+      "to": "api",
+      "label": "HTTP tests",
+      "variant": "dashed",
+      "fromSide": "right",
       "toSide": "bottom"
     }
   ],
@@ -378,25 +234,27 @@
       "dot": "cyan",
       "title": "Ingestion",
       "items": [
-        "HTTPS allowlisted depth-1 clone or ZIP upload",
-        "Structure-aware chunks, embeddings cached on disk",
-        "Runs as a FastAPI background task"
+        "Allowlisted HTTPS clone or ZIP upload",
+        "AST chunks carry the constants they use",
+        "Embeddings cached; re-index is free"
       ]
     },
     {
       "dot": "emerald",
       "title": "Query",
       "items": [
+        "Follow-ups rewritten to a standalone question",
         "Retrieve 10 by cosine, rerank to 3",
-        "Answers cite [n] markers validated against sources"
+        "[n] citations validated against sources"
       ]
     },
     {
-      "dot": "violet",
-      "title": "Storage",
+      "dot": "amber",
+      "title": "Models & results",
       "items": [
-        "repositories → files → chunks + conversations",
-        "One Postgres for metadata and vectors"
+        "Ollama by default; OpenAI or fakes via .env",
+        "Rerank: Top-1 24→38% here, 60→78% on Flask",
+        "Answer key facts 8→11 of 14 after fixes"
       ]
     }
   ]
