@@ -174,6 +174,6 @@ def prepare(settings: Settings) -> None:
         print("  WARNING: EMBEDDING_PROVIDER=fake")
         print("  Fake embeddings are random vectors, so the scores below measure")
         print("  nothing. They prove the harness runs end to end, not that")
-        print("  retrieval works. Set EMBEDDING_PROVIDER=openai in .env for real")
+        print("  retrieval works. Set EMBEDDING_PROVIDER=ollama (or openai) for real")
         print("  numbers, and do not put these on a CV.")
         print("  " + "=" * 66)

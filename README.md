@@ -65,11 +65,15 @@ shortlist.
 |---|---|
 | Backend | Python 3.11, FastAPI, SQLAlchemy 2.0 |
 | Vector store | PostgreSQL 17 + pgvector 0.8 (HNSW, cosine) |
-| Embeddings | OpenAI `text-embedding-3-small` (provider-agnostic) |
-| Generation | OpenAI `gpt-4o-mini` (provider-agnostic) |
+| Embeddings | `qwen3-embedding:0.6b` via Ollama, or OpenAI `text-embedding-3-small` |
+| Generation | `qwen2.5:7b` via Ollama, or OpenAI `gpt-4o-mini` |
 | Frontend | React 19, Vite, Tailwind 4 |
 | Infra | Docker Compose |
-| Tests | pytest — **292 tests** |
+| Tests | pytest — **303 tests** |
+
+Providers are an `.env` change: `ollama` (free, local), `openai`, or `fake`
+(offline, for tests). Every number in this README was measured on the local
+models, on a laptop with a 6 GB RTX 4050.
 
 No LangChain or LlamaIndex. Every stage — chunking, embedding, retrieval,
 reranking, prompt assembly, citation validation — is written directly, because
@@ -180,7 +184,7 @@ vector ordering rather than failing the question.
 ```bash
 git clone <your-repo-url> codebase-ai
 cd codebase-ai
-cp .env.example .env          # then paste your OPENAI_API_KEY
+cp .env.example .env          # pick providers, see below
 ```
 
 ```bash
@@ -202,9 +206,47 @@ cd frontend && npm install && npm run dev
 Open **http://localhost:5173** (the UI) or **http://localhost:8000/docs** (the
 generated API reference).
 
-### Running without an API key
+### Running locally for free (Ollama)
 
-Everything runs offline with deterministic fake providers:
+Install [Ollama](https://ollama.com), then pull the two models and build the
+8k-context variant of the LLM:
+
+```bash
+ollama pull qwen3-embedding:0.6b
+```
+
+```bash
+ollama pull qwen2.5:7b
+```
+
+```bash
+ollama create qwen2.5-8k -f ollama/qwen2.5-8k.Modelfile
+```
+
+and set in `.env`:
+
+```bash
+EMBEDDING_PROVIDER=ollama
+EMBEDDING_MODEL=qwen3-embedding:0.6b
+EMBEDDING_DIM=1024
+LLM_PROVIDER=ollama
+LLM_MODEL=qwen2.5-8k
+```
+
+Changing `EMBEDDING_DIM` changes the width of the vector column, so recreate the
+schema afterwards with `python scripts/init_db.py --reset`.
+
+**Why the 8k variant.** Ollama defaults to a 4096-token context and silently
+drops the *start* of a longer prompt — which is where the grounding instructions
+live. `MAX_CONTEXT_TOKENS` allows up to 8000 tokens of retrieved code, so the
+default window can quietly turn a grounded prompt into an ungrounded one.
+
+On the 6 GB GPU above, indexing this backend (586 chunks) takes about 30 s and
+a full question — search, rerank, answer — about 15–18 s.
+
+### Running fully offline (fakes)
+
+Everything also runs with deterministic fake providers and no model at all:
 
 ```bash
 EMBEDDING_PROVIDER=fake
@@ -212,8 +254,9 @@ LLM_PROVIDER=fake
 ```
 
 The full pipeline, API and UI work; only the *semantics* are absent, since fake
-embeddings are random vectors. This is what keeps the 292-test suite free and
-network-independent.
+embeddings are random vectors. This is what keeps the test suite free and
+network-independent; the tests pin these providers themselves, whatever `.env`
+says.
 
 ---
 
@@ -248,14 +291,31 @@ code. They need completely different fixes, and this endpoint separates them.
 
 > *"How did you know your RAG system was working?"*
 
-A 55-question dataset labelled against this repository's own backend, in
-[`evaluation/dataset.json`](evaluation/dataset.json). Questions are phrased the
-way a developer would ask them rather than by quoting identifiers, so a hit
-requires semantic retrieval rather than keyword overlap.
+Two labelled datasets. Questions are phrased the way a developer would ask
+them rather than by quoting identifiers, so a hit requires semantic retrieval
+rather than keyword overlap.
+
+- [`evaluation/dataset.json`](evaluation/dataset.json) — 55 questions about this
+  repository's own backend.
+- [`evaluation/dataset_flask.json`](evaluation/dataset_flask.json) — 45
+  questions about [Flask](https://github.com/pallets/flask) 3.1.3, written
+  **before** any configuration was run against it, so nothing was tuned to it.
+  It is the held-out check on conclusions drawn from the first set.
 
 ```bash
 python evaluation/evaluate_retrieval.py
+```
+
+```bash
 python evaluation/run_experiments.py
+```
+
+```bash
+git clone --depth 1 --branch 3.1.3 https://github.com/pallets/flask data/eval_repos/flask
+```
+
+```bash
+python evaluation/run_experiments.py --dataset evaluation/dataset_flask.json
 ```
 
 **Metrics.** Top-1/3/5 accuracy (did an expected file appear in the top K?) and
@@ -271,30 +331,55 @@ runs is a real difference in the system rather than sampling noise.
 
 ### Results
 
-**Not yet measured.** The harness is complete and tested, but every run so far
-used the fake embedding provider, so the numbers it produced are noise. They are
-deliberately not reproduced here.
+Local models: `qwen3-embedding:0.6b` for retrieval, `qwen2.5:7b` for
+reranking. Full tables, including the top-K and chunk-size sweeps, are in
+[`evaluation/results/`](evaluation/results/).
 
-`EvalReport.is_meaningful` is `False` for any run involving a fake provider, and
-both the terminal report and the generated Markdown carry the disclaimer
-automatically, so a meaningless run cannot be mistaken for a result.
-
-To produce real numbers, set `EMBEDDING_PROVIDER=openai` in `.env` and re-run
-`run_experiments.py`. The table below is the shape the output takes; the cells
-are intentionally blank:
+**This backend** (55 questions)
 
 | Configuration | Top-1 | Top-3 | Top-5 | MRR |
 |---|---:|---:|---:|---:|
-| naive chunking | — | — | — | — |
-| code-aware chunking | — | — | — | — |
-| code-aware + reranking | — | — | — | — |
+| naive chunking | 23.6% | 72.7% | 85.5% | 0.475 |
+| code-aware chunking | 23.6% | 54.5% | 72.7% | 0.435 |
+| code-aware + reranking | **38.2%** | 70.9% | 78.2% | **0.552** |
 
-One caveat already visible from the offline runs, worth knowing before reading
-real ones: naive chunking produces fewer, larger chunks, so each chunk covers
-more of a file and has a mechanically higher chance of containing the expected
-path. A naive-vs-code-aware comparison is partly a comparison of chunk
-granularity, and the per-category breakdown and MRR are more informative than
-Top-K alone.
+**Flask 3.1.3, held out** (45 questions)
+
+| Configuration | Top-1 | Top-3 | Top-5 | MRR |
+|---|---:|---:|---:|---:|
+| naive chunking | 53.3% | 68.9% | 84.4% | 0.650 |
+| code-aware chunking | 60.0% | 84.4% | 91.1% | 0.729 |
+| code-aware + reranking | **77.8%** | **91.1%** | **93.3%** | **0.845** |
+
+What the numbers say:
+
+- **Reranking is the one consistent win.** Top-1 rises by 15–18 points on both
+  repositories. Vector similarity finds the right neighbourhood; the reranker
+  picks the right house.
+- **Code-aware chunking won on Flask and lost on this backend.** The difference
+  is chunk size. Flask's functions carry their own docstrings, so a function is
+  a self-describing unit (median chunk 14 lines). This backend explains its
+  design in long module docstrings, which become chunks separate from the code
+  they describe, and half its code-aware chunks are 8 lines or fewer — too
+  little text to say what the file is for. The small-chunk merge only fires
+  when *both* neighbours are under 5 lines, so short functions stay isolated.
+- **Packing small chunks together was tried and not adopted.** Greedily merging
+  neighbouring functions up to 60 lines lifted this backend to 40.0% Top-1 —
+  but 60 was chosen by looking at those results, and on held-out Flask the
+  effect was mixed (Top-1 up 6.7 points, Top-3 and Top-5 down 2.2). One
+  question is worth about 2 points here, so that is not evidence of a real
+  improvement.
+- **Test files are the biggest single factor.** They take about half of all
+  top-5 slots. Excluding `tests/` from the index raised code-aware Top-1 from
+  23.6% to 61.8% on this backend and from 60.0% to 82.2% on Flask. Part of that
+  is labelling — only source files count as correct, so a test exercising the
+  right behaviour scores as a miss — but an assistant that answers "how does X
+  work?" from a test is still giving a worse answer.
+
+The harness keeps its own results honest: `EvalReport.is_meaningful` is
+`False` for any run involving a fake provider, and both the terminal report and
+the generated Markdown carry a disclaimer automatically, so a meaningless run
+cannot be mistaken for a result.
 
 ---
 
@@ -309,9 +394,11 @@ transaction beats a distributed delete with no shared transaction.
 order is irrelevant. `vector_cosine_ops` must match the `<=>` operator or
 Postgres silently ignores the index.
 
-**Code-aware chunking over fixed windows.** Syntactic boundaries produce chunks
-whose embeddings mean what the code means. Both strategies are implemented,
-because the point is to *measure* the difference rather than assert it.
+**Code-aware chunking over fixed windows — measured, not assumed.** Syntactic
+boundaries produce chunks whose embeddings mean what the code means, and on
+held-out Flask that won by 15 points of Top-3. On this repository it lost,
+because its chunks came out too small (see [Results](#results)). Both
+strategies stay in the codebase so the comparison can be re-run on any corpus.
 
 **One repository row per indexing run**, keyed by `(name, model, strategy)`, so
 naive and code-aware indexes coexist and the experiment doesn't require
@@ -337,7 +424,9 @@ Source acquisition is the only place untrusted input enters, and it's guarded:
 - **SSRF** — clone URLs must be `https` on an allowlisted host, blocking
   `file://`, `ssh://` and requests to internal or cloud-metadata addresses. Git
   runs as an argument list (never a shell string) with `GIT_TERMINAL_PROMPT=0`
-  and a timeout.
+  and a timeout, in a minimal environment: an allowlist of `PATH`,
+  `SYSTEMROOT` (without which Windows git cannot resolve any host) and the
+  proxy variables, so stray `GIT_*` settings cannot change what a clone does.
 
 Secrets live only in `.env`, which is gitignored and never committed.
 
@@ -357,9 +446,11 @@ backend/
                   sources, evaluation
     config.py     typed settings from .env
     main.py       FastAPI app
-  tests/          292 tests
+  tests/          303 tests
 frontend/         React + Vite + Tailwind
-evaluation/       dataset.json, harness, experiment runner, results/
+evaluation/       datasets (own backend, Flask), harness, experiment runner,
+                  results/
+ollama/           Modelfile for the 8k-context local LLM
 scripts/          per-stage CLIs (parse, chunk, index, search, ask)
 docker-compose.yml
 ```
@@ -388,7 +479,7 @@ earlier, in retrieval.
 cd backend && ../.venv/Scripts/python -m pytest
 ```
 
-292 tests. Database-backed tests use a separate `_test` database, created on
+303 tests. Database-backed tests use a separate `_test` database, created on
 demand, and the suite **refuses to run** against any database whose name doesn't
 end in `_test` — an earlier version truncated the development database on every
 run.

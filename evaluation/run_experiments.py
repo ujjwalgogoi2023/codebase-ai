@@ -99,7 +99,7 @@ def main() -> int:
         else (
             "\n> **These numbers are not meaningful.** This run used the fake "
             "embedding provider,\n> which returns random vectors. Re-run with "
-            "`EMBEDDING_PROVIDER=openai` to measure anything real.\n"
+            "`EMBEDDING_PROVIDER=ollama` (or `openai`) to measure anything real.\n"
         )
     )
     (RESULTS_DIR / f"experiments{suffix}.md").write_text(

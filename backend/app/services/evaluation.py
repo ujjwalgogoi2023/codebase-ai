@@ -346,7 +346,7 @@ def format_report(report: EvalReport) -> str:
         lines.append("  " + "=" * 58)
         lines.append("  THESE NUMBERS ARE NOT MEANINGFUL.")
         lines.append("  The run used the fake embedding provider, which returns")
-        lines.append("  random vectors. Set EMBEDDING_PROVIDER=openai in .env and")
+        lines.append("  random vectors. Set EMBEDDING_PROVIDER=ollama (or openai) and")
         lines.append("  re-run to measure anything real. Do not quote these.")
         lines.append("  " + "=" * 58)
 

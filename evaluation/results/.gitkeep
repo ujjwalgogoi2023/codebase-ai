@@ -1,13 +1,12 @@
 Evaluation output lands here.
 
-Deliberately empty in version control. Every run so far used the fake embedding
-provider, whose vectors are random, so the numbers it produced measure nothing.
-Committing them -- even carrying their disclaimer -- risks someone quoting a
-figure that was never a result.
-
-Populate this directory by setting EMBEDDING_PROVIDER=openai in .env and running:
+Only runs with real providers are committed. A run on the fake embedding
+provider uses random vectors, so its numbers measure nothing, and committing
+them -- even carrying their disclaimer -- risks someone quoting a figure that
+was never a result.
 
     python evaluation/run_experiments.py
+    python evaluation/run_experiments.py --dataset evaluation/dataset_flask.json
 
-Then commit experiments.json and experiments.md, and fill in the results table
-in the README from them.
+The first writes experiments.json/.md, the second experiments_flask.json/.md.
+The README results tables are filled in from these files.
